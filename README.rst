@@ -59,7 +59,7 @@ Download
 
 ::
 
-  $ git clone https://github.com/seqan/dream_yara.git
+  $ git clone --recurse-submodules https://github.com/seqan/dream_yara.git
 
 Configuration
 ~~~~~~~~~~~~~
