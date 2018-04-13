@@ -1,0 +1,17 @@
+Name: YARA / DREAM-YARA
+Author: Enrico Siragusa <enrico.siragusa@fu-berlin.de>
+        Temesgen H. Dadi <temesgen.dadi@fu-berlin.de>
+Maintainer: Enrico Siragusa <enrico.siragusa@fu-berlin.de>
+            Temesgen H. Dadi <temesgen.dadi@fu-berlin.de>
+License: GPL v3
+Copyright: 2013-2018, FU Berlin
+Status: under development
+Description: (dream) Yara - Yet another read aligner
+Yara is an exact tool for aligning DNA sequencing reads to reference genomes.
+Main features
+~~~~~~~~~~~~~
+* Exhaustive enumeration of sub-*optimal* end-to-end alignments under the edit distance.
+* Excellent speed, memory footprint and accuracy.
+* Accurate mapping quality computation.
+* Support for reference genomes consisiting of million of contigs.
+* Direct output in SAM/BAM format.
