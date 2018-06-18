@@ -4,7 +4,7 @@
 Overview
 --------
 Yara is an *exact* tool for aligning DNA sequencing reads to reference genomes.
-DREAM-Yara is an extension of the Yara to support distributed read mapping.  
+DREAM-Yara is an extension of Yara to support distributed read mapping.  
 It works by spliting a given reference database in to smaller manageble partitions 
 and this allows faster indexing and super fast updating time.
 DREAM-Yara can quickly exclude reads for parts of the databases where they cannot match. 
