@@ -69,7 +69,7 @@ public:
     std::vector<uint32_t>   contigOffsets;
 
     std::vector<std::vector<uint32_t>>          origReadIdMap;
-    std::map<uint32_t, String<CigarElement<>>>  cigarSet;
+    std::map<uint32_t, String<CigarElement<>>>  collectedCigars;
 
     FilterType      filterType = BLOOM;
 
@@ -155,6 +155,31 @@ inline void copyMatches(Mapper<TSpec, TMainConfig> & mainMapper, Mapper<TSpec, T
 }
 
 // ----------------------------------------------------------------------------
+// Function display Cigars()
+// ----------------------------------------------------------------------------
+inline CharString cigars2String(String<CigarElement<> > const & cigStr)
+{
+    CharString cs;
+    for (CigarElement<> const & cigElement : cigStr)
+    {
+        appendNumber(cs, cigElement.count);
+        appendValue(cs, cigElement.operation);
+    }
+    return cs;
+}
+
+inline StringSet<CharString> cigarsSet2String(StringSet<String<CigarElement<> >, Segment< String<CigarElement<> >> > & cigStrSet)
+{
+    StringSet<CharString> css;
+    for (String<CigarElement<>> const & cigStr : cigStrSet)
+    {
+        appendValue(css, cigars2String(cigStr));
+    }
+    return css;
+}
+
+
+// ----------------------------------------------------------------------------
 // Function copyCigars()
 // ----------------------------------------------------------------------------
 template <typename TSpec, typename TConfig, typename TMainConfig>
@@ -182,7 +207,7 @@ inline void copyCigars(Mapper<TSpec, TMainConfig> & mainMapper, Mapper<TSpec, TC
 
         if(getMinErrors(mainMapper.ctx, origReadId) == currentMatch.errors)
         {
-            disOptions.cigarSet[origReadId] = childMapper.cigarSet[readId];
+            disOptions.collectedCigars[origReadId] = childMapper.cigars[readId];
         }
     }
     stop(mainMapper.timer);
@@ -197,16 +222,23 @@ inline void transferCigars(Mapper<TSpec, TMainConfig> & mainMapper, DisOptions &
 {
     start(mainMapper.timer);
 
-    typedef typename MapperTraits<TSpec, TMainConfig>::TThreading             TThreading;
+    typedef MapperTraits<TSpec, TMainConfig>         TTraits;
+    typedef typename TTraits::TCigarsPos             TCigarsPos;
+    typedef typename TTraits::TThreading             TThreading;
 
-    resize(mainMapper.cigarSet.limits, getReadsCount(mainMapper.reads.seqs)+1, 0);
-    for(auto iter = disOptions.cigarSet.begin(); iter != disOptions.cigarSet.end(); ++iter)
+    resize(mainMapper.cigars.limits, getReadsCount(mainMapper.reads.seqs)+1, 0);
+    for(auto iter = disOptions.collectedCigars.begin(); iter != disOptions.collectedCigars.end(); ++iter)
     {
-        mainMapper.cigarSet.limits[iter->first + 1] = length(iter->second);
-        append(mainMapper.cigars, iter->second);
-    }
-    partialSum(mainMapper.cigarSet.limits, TThreading());
-    assign(mainMapper.cigarSet.positions, prefix(mainMapper.cigarSet.limits, length(mainMapper.cigarSet.limits) - 1));
+        mainMapper.cigars.limits[iter->first + 1] = length(iter->second);
+        append(mainMapper.cigarString, iter->second);
+    } 
+    partialSum(mainMapper.cigars.limits, TThreading());
+    assign(mainMapper.cigars.positions, prefix(mainMapper.cigars.limits, length(mainMapper.cigars.limits) - 1));
+
+    // If only the primary matches were aligned, we use the identity modifier
+    setHost(mainMapper.primaryCigars, mainMapper.cigars);
+    setCargo(mainMapper.primaryCigars, mainMapper.primaryCigarPositions);
+    assign(mainMapper.primaryCigarPositions, seqan::Range<TCigarsPos>(0, length(mainMapper.primaryMatches)), Exact());
 
     stop(mainMapper.timer);
     disOptions.moveCigars += getValue(mainMapper.timer);
@@ -534,32 +566,6 @@ void configureMapper(Options const & options,
     }
 }
 
-// ----------------------------------------------------------------------------
-// Function alignMatches()
-// ----------------------------------------------------------------------------
-
-template <typename TSpec, typename TConfig, typename TContigSeqs>
-inline void alignMatches(Mapper<TSpec, TConfig> & me, TContigSeqs & contigSeqs)
-{
-    typedef MapperTraits<TSpec, TConfig>            TTraits;
-    typedef MatchesAligner<LinearGaps, TTraits>     TLinearAligner;
-    typedef MatchesAligner<AffineGaps , TTraits>    TAffineAligner;
-
-    start(me.timer);
-    setHost(me.cigarSet, me.cigars);
-    typename TTraits::TCigarLimits cigarLimits;
-
-    if (me.options.rabema)
-        TLinearAligner aligner(me.cigarSet, cigarLimits, me.primaryMatches, contigSeqs, me.reads.seqs, me.options);
-    else
-        TAffineAligner aligner(me.cigarSet, cigarLimits, me.primaryMatches, contigSeqs, me.reads.seqs, me.options);
-
-    stop(me.timer);
-    me.stats.alignMatches += getValue(me.timer);
-
-    if (me.options.verbose > 1)
-        std::cerr << "Alignment time:\t\t\t" << me.timer << std::endl;
-}
 
 // ----------------------------------------------------------------------------
 // Function loadAllContigs()
@@ -635,8 +641,8 @@ inline void rankMatches2(Mapper<TSpec, TConfig> & me, TReadSeqs const & readSeqs
     clipMatches(me.optimalMatchesSet, countMatchesInBestStratum<TMatchesViewSetValue>, typename TTraits::TThreading());
     
     // Select all sub-optimal matches.
-    assign(me.suboptimalMatchesSet, me.matchesSetByErrors);
-    clipMatches(me.suboptimalMatchesSet, [&](TMatchesViewSetValue const & matches)
+    assign(me.matchesSet, me.matchesSetByErrors);
+    clipMatches(me.matchesSet, [&](TMatchesViewSetValue const & matches)
                 {
                     if (empty(matches)) return TMatchesSize(0);
                     
@@ -807,8 +813,8 @@ template <typename TSpec, typename TMainConfig, typename TFilter>
 inline void prepairMainMapper(Mapper<TSpec, TMainConfig> & mainMapper, TFilter const & filter, DisOptions & disOptions)
 {
     initReadsContext(mainMapper, mainMapper.reads.seqs);
-    setHost(mainMapper.cigarSet, mainMapper.cigars);
-    disOptions.cigarSet.clear();
+    setHost(mainMapper.cigars, mainMapper.cigarString);
+    disOptions.collectedCigars.clear();
     if (IsSameType<typename TMainConfig::TSequencing, PairedEnd>::VALUE)
         resize(mainMapper.primaryMatchesProbs, getReadsCount(mainMapper.reads.seqs), 0.0, Exact());
     if(disOptions.filterType != NONE)
@@ -824,6 +830,7 @@ inline void finalizeMainMapper(Mapper<TSpec, TMainConfig> & mainMapper, DisOptio
     aggregateMatches(mainMapper, mainMapper.reads.seqs);
     rankMatches2(mainMapper, mainMapper.reads.seqs);
     transferCigars(mainMapper, disOptions);
+
     writeMatches(mainMapper);
     clearMatches(mainMapper);
     clearAlignments(mainMapper);

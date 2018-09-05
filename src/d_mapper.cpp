@@ -155,13 +155,19 @@ void setupArgumentParser(ArgumentParser & parser, DisOptions const & disOptions)
     addOption(parser, ArgParseOption("rg", "read-group", "Specify a read group for all records in the SAM/BAM file.",
                                      ArgParseOption::STRING));
     setDefaultValue(parser, "read-group", disOptions.readGroup);
-
-    addOption(parser, ArgParseOption("sa", "secondary-alignments", "Specify whether to output secondary alignments in \
+    addOption(parser, ArgParseOption("sm", "secondary-matches", "Specify whether to output secondary matches in \
                                      the XA tag of the primary alignment, as separate \
                                      secondary records, or to omit them.",
                                      ArgParseOption::STRING));
-    setValidValues(parser, "secondary-alignments", disOptions.secondaryAlignmentsList);
-    setDefaultValue(parser, "secondary-alignments", disOptions.secondaryAlignmentsList[disOptions.secondaryAlignments]);
+    setValidValues(parser, "secondary-matches", disOptions.secondaryMatchesList);
+    setDefaultValue(parser, "secondary-matches", disOptions.secondaryMatchesList[disOptions.secondaryMatches]);
+
+    // Keep legacy option to display an error
+    addOption(parser, ArgParseOption("sa", "secondary-alignments", "This option has been renamed to 'secondary-matches'.",
+                                     ArgParseOption::STRING));
+    hideOption(parser, "sa");
+    addOption(parser, ArgParseOption("as", "align-secondary", "Compute and output co- and suboptimal \
+                                     match alignments. Ignored if '-sa omit' is set."));
 
     addOption(parser, ArgParseOption("ra", "rabema-alignments", "Output alignments compatible with the \
                                      Read Alignment BEnchMArk (RABEMA)."));
@@ -309,8 +315,21 @@ parseCommandLine(DisOptions & disOptions, ArgumentParser & parser, int argc, cha
 
     // Parse output disOptions.
     getOptionValue(disOptions.readGroup, parser, "read-group");
-    getOptionValue(disOptions.secondaryAlignments, parser, "secondary-alignments", disOptions.secondaryAlignmentsList);
+    getOptionValue(disOptions.secondaryMatches, parser, "secondary-alignments", disOptions.secondaryMatchesList);
     getOptionValue(disOptions.rabema, parser, "rabema-alignments");
+
+    getOptionValue(disOptions.alignSecondary, parser, "align-secondary");
+    if (isSet(parser, "secondary-alignments"))
+    {
+        std::cerr << getAppName(parser) << ": The 'secondary-alignments' option has been renamed to 'secondary-matches'!" << std::endl;
+        return ArgumentParser::PARSE_ERROR;
+    }
+    if (disOptions.alignSecondary && disOptions.secondaryMatches == OMIT)
+    {
+        disOptions.alignSecondary = false;
+        std::cerr << getAppName(parser) << ": WARNING, ignoring '-as' as '-sa omit' is set." << std::endl;
+    }
+
     if (isSet(parser, "skip-sam-headers")) disOptions.skipSamHeader = true;
 
     // Parse mapping disOptions.

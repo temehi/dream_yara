@@ -41,7 +41,7 @@ if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/include/seqan/include/seqan/version.h")
 endif ()
 
 if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/include/sdsl-lite/include/sdsl/bits.hpp")
-    set (SDSL_INCLUDE_DIRS 
+    set (SDSL_INCLUDE_DIRS
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sdsl-lite/include)
     message (STATUS "Found a local SDSL library provided with the YARA source code.")
 endif ()
