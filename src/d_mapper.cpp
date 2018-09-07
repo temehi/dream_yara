@@ -166,8 +166,10 @@ void setupArgumentParser(ArgumentParser & parser, DisOptions const & disOptions)
     addOption(parser, ArgParseOption("sa", "secondary-alignments", "This option has been renamed to 'secondary-matches'.",
                                      ArgParseOption::STRING));
     hideOption(parser, "sa");
-    addOption(parser, ArgParseOption("as", "align-secondary", "Compute and output co- and suboptimal \
-                                     match alignments. Ignored if '-sa omit' is set."));
+
+    // Turn off for DREAM-Yara temporarly till matches and cigar managment is handeled properly
+    // addOption(parser, ArgParseOption("as", "align-secondary", "Compute and output co- and suboptimal \
+    //                                  match alignments. Ignored if '-sa omit' is set."));
 
     addOption(parser, ArgParseOption("ra", "rabema-alignments", "Output alignments compatible with the \
                                      Read Alignment BEnchMArk (RABEMA)."));
@@ -237,7 +239,7 @@ void setupArgumentParser(ArgumentParser & parser, DisOptions const & disOptions)
 
     addOption(parser, ArgParseOption("rb", "reads-batch", "Specify the number of reads to process in one batch.",
                                      ArgParseOption::INTEGER));
-    
+
     setMinValue(parser, "reads-batch", "1000");
     setMaxValue(parser, "reads-batch", "5000000");
     setDefaultValue(parser, "reads-batch", disOptions.readsCount);
@@ -318,17 +320,19 @@ parseCommandLine(DisOptions & disOptions, ArgumentParser & parser, int argc, cha
     getOptionValue(disOptions.secondaryMatches, parser, "secondary-alignments", disOptions.secondaryMatchesList);
     getOptionValue(disOptions.rabema, parser, "rabema-alignments");
 
-    getOptionValue(disOptions.alignSecondary, parser, "align-secondary");
     if (isSet(parser, "secondary-alignments"))
     {
         std::cerr << getAppName(parser) << ": The 'secondary-alignments' option has been renamed to 'secondary-matches'!" << std::endl;
         return ArgumentParser::PARSE_ERROR;
     }
-    if (disOptions.alignSecondary && disOptions.secondaryMatches == OMIT)
-    {
-        disOptions.alignSecondary = false;
-        std::cerr << getAppName(parser) << ": WARNING, ignoring '-as' as '-sa omit' is set." << std::endl;
-    }
+
+    // Turn off for DREAM-Yara temporarly till matches and cigar managment is handeled properly
+    // getOptionValue(disOptions.alignSecondary, parser, "align-secondary");
+    // if (disOptions.alignSecondary && disOptions.secondaryMatches == OMIT)
+    // {
+    //     disOptions.alignSecondary = false;
+    //     std::cerr << getAppName(parser) << ": WARNING, ignoring '-as' as '-sa omit' is set." << std::endl;
+    // }
 
     if (isSet(parser, "skip-sam-headers")) disOptions.skipSamHeader = true;
 
