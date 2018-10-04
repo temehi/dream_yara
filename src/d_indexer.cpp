@@ -150,7 +150,7 @@ void setupArgumentParser(ArgumentParser & parser, Options const & options)
     addOption(parser, ArgParseOption("o", "output-prefix", "Specify a filename prefix for the reference genome index. \
                                      Default: use the filename prefix of the reference genome.", ArgParseOption::OUTPUT_PREFIX));
     setRequired(parser, "output-prefix");
-    
+
     addOption(parser, ArgParseOption("td", "tmp-dir", "Specify a temporary directory where to construct the index. \
                                      Default: use the output directory.", ArgParseOption::STRING));
 //    addOption(parser, ArgParseOption("b", "number-of-bins", "The number of bins (indices) for distributed mapper",
@@ -203,7 +203,7 @@ parseCommandLine(Options & options, ArgumentParser & parser, int argc, char cons
             exit(1);
         }
     }
-    
+
     // Parse contigs index prefix.
     getOptionValue(options.contigsIndexFile, parser, "output-prefix");
 
@@ -354,10 +354,10 @@ void saveIndex(YaraIndexer<TSpec, TConfig> & me)
     }
     else
     {
-#ifdef YARA_LARGE_CONTIGS
+#ifdef DDR_YARA_LARGE_CONTIGS
         saveIndex<TContigsSize, uint64_t>(me);
 #else
-        throw RuntimeError("Maximum contig length exceeded. Recompile with -DYARA_LARGE_CONTIGS=ON.");
+        throw RuntimeError("Maximum contig length exceeded. Recompile with -DDR_YARA_LARGE_CONTIGS=ON.");
 #endif
     }
 }
@@ -375,10 +375,10 @@ void saveIndex(YaraIndexer<TSpec, TConfig> & me)
     }
     else
     {
-#ifdef YARA_LARGE_CONTIGS
+#ifdef DDR_YARA_LARGE_CONTIGS
         saveIndex<uint32_t>(me);
 #else
-        throw RuntimeError("Maximum number of contigs exceeded. Recompile with -DYARA_LARGE_CONTIGS=ON.");
+        throw RuntimeError("Maximum number of contigs exceeded. Recompile with -DDR_YARA_LARGE_CONTIGS=ON.");
 #endif
     }
 }

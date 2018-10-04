@@ -1,5 +1,5 @@
 # ===========================================================================
-#                  Yara - Yet Another Read Aligner
+#          DREAM-Yara - a distributed version of the Yara read mapper
 # ===========================================================================
 
 cmake_minimum_required (VERSION 3.0.0)
@@ -10,7 +10,7 @@ set(ColourRed   "${Esc}[31m")
 
 message (STATUS "${ColourBold}Compiler Detection...${ColourReset}")
 
-project (YARA CXX)
+project (DREAM-YARA CXX)
 # ----------------------------------------------------------------------------
 # Make "Release" the default cmake build type
 # ----------------------------------------------------------------------------
@@ -36,14 +36,14 @@ if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/include/seqan/include/seqan/version.h")
     set (CMAKE_MODULE_PATH
        ${CMAKE_CURRENT_SOURCE_DIR}/include/seqan/util/cmake
        ${CMAKE_MODULE_PATH})
-    message (STATUS "Found a local SeqAn library provided with the YARA source code.")
+    message (STATUS "Found a local SeqAn library provided with the DREAM-YARA source code.")
     message (    "   This will be preferred over system global headers.")
 endif ()
 
 if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/include/sdsl-lite/include/sdsl/bits.hpp")
     set (SDSL_INCLUDE_DIRS
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sdsl-lite/include)
-    message (STATUS "Found a local SDSL library provided with the YARA source code.")
+    message (STATUS "Found a local SDSL library provided with the DREAM-YARA source code.")
 endif ()
 
 
@@ -52,7 +52,7 @@ endif ()
 # Add Yara targets
 # ----------------------------------------------------------------------------
 
-message (STATUS "${ColourBold}Configuring \(dream\) Yara...${ColourReset}")
+message (STATUS "${ColourBold}Configuring DREAM-Yara...${ColourReset}")
 add_subdirectory(src)
 
 # ----------------------------------------------------------------------------
@@ -67,5 +67,20 @@ endif ()
 # Add Tests
 # ----------------------------------------------------------------------------
 
-# message (STATUS "${ColourBold}Configuring YARA Tests...${ColourReset}")
-# add_subdirectory(tests)
+# message (STATUS "${ColourBold}Configuring DREAM-YARA Tests...${ColourReset}")
+
+enable_testing ()
+
+if (MODEL MATCHES ".*MemCheck.*")
+    set (_VALGRIND_FLAG --valgrind)
+else ()
+    set (_VALGRIND_FLAG)
+endif ()
+find_package (PythonInterp)
+if (PYTHONINTERP_FOUND)
+  add_test (NAME app_test_dream_yara
+            COMMAND python2
+                    ${CMAKE_SOURCE_DIR}/tests/run_tests.py
+                    ${_VALGRIND_FLAG}
+                    ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
+endif (PYTHONINTERP_FOUND)

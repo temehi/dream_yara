@@ -1,15 +1,15 @@
-(DREAM-)Yara - An exact read mapper for very large databases with short update time 
-=================================================================================
+(DREAM-)Yara - An exact read mapper for very large databases with short update time
+===================================================================================
 
 Overview
 --------
 Yara is an *exact* tool for aligning DNA sequencing reads to reference genomes.
-DREAM-Yara is an extension of Yara to support distributed read mapping.  
-It works by spliting a given reference database in to smaller manageble partitions 
+DREAM-Yara is an extension of Yara to support distributed read mapping.
+It works by spliting a given reference database in to smaller manageble partitions
 and this allows faster indexing and super fast updating time.
-DREAM-Yara can quickly exclude reads for parts of the databases where they cannot match. 
-This allows us to keep the databases in several indices which can be easily rebuilt 
-if parts are updated while maintaining a fast search time. 
+DREAM-Yara can quickly exclude reads for parts of the databases where they cannot match.
+This allows us to keep the databases in several indices which can be easily rebuilt
+if parts are updated while maintaining a fast search time.
 Both Yara and DREAM-Yara are fully sensitive read mappers.
 
 
@@ -153,7 +153,7 @@ Distributed Indexer
 Here we rquire a refence database splited in to many bins. This can be achieved (eg.) by using TaxSBP from https://github.com/pirovc/taxsbp
 
 ::
-    
+
   $ git clone https://github.com/pirovc/taxsbp
 
 
@@ -175,7 +175,7 @@ Map single-end DNA reads on the indexed reference genome by executing:
 
 ::
 
-  $ dream_yara_mapper -t 8 -ft bloom -e 3 -fi IBF.filter -o READS.bam INDICES_DIR/ READS.fastq.gz 
+  $ dream_yara_mapper -t 8 -ft bloom -e 3 -fi IBF.filter -o READS.bam INDICES_DIR/ READS.fastq.gz
 
 Paired-end reads
 ^^^^^^^^^^^^^^^^
@@ -184,7 +184,7 @@ Map paired-end reads by providing two DNA read files:
 
 ::
 
-  $ dream_yara_mapper -t 8 -ft bloom -e 3 -fi IBF.filter -o READS.bam INDICES_DIR/ READS_1.fastq.gz READS2.fastq.gz 
+  $ dream_yara_mapper -t 8 -ft bloom -e 3 -fi IBF.filter -o READS.bam INDICES_DIR/ READS_1.fastq.gz READS2.fastq.gz
 
 
 Output format
@@ -193,17 +193,17 @@ Output format
 Output files follow the `SAM/BAM format specification <http://samtools.github.io/hts-specs/SAMv1.pdf>`_.
 In addition, Yara generates the following optional tags:
 
-+-----+----------------------------------------------------+ 
-| Tag | Meaning                                            | 
-+=====+====================================================+ 
++-----+----------------------------------------------------+
+| Tag | Meaning                                            |
++=====+====================================================+
 | NM  | Edit distance                                      |
-+-----+----------------------------------------------------+ 
++-----+----------------------------------------------------+
 | X0  | Number of co-optimal mapping locations             |
-+-----+----------------------------------------------------+ 
++-----+----------------------------------------------------+
 | X1  | Number of sub-optimal mapping locations            |
-+-----+----------------------------------------------------+ 
++-----+----------------------------------------------------+
 | XA  | Alternative locations: (chr,begin,end,strand,NM;)* |
-+-----+----------------------------------------------------+ 
++-----+----------------------------------------------------+
 
 
 Contact

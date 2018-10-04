@@ -83,7 +83,7 @@ public:
     uint16_t getThreshold(uint16_t readLen)
     {
         uint16_t maxError = errorRate * readLen;
-        
+
         // same as readLen - kmerSize + 1 - (maxError * kmerSize);
         if (kmerSize * (1 + maxError) > readLen)
             return 0;
@@ -231,7 +231,7 @@ inline void transferCigars(Mapper<TSpec, TMainConfig> & mainMapper, DisOptions &
     {
         mainMapper.cigars.limits[iter->first + 1] = length(iter->second);
         append(mainMapper.cigarString, iter->second);
-    } 
+    }
     partialSum(mainMapper.cigars.limits, TThreading());
     assign(mainMapper.cigars.positions, prefix(mainMapper.cigars.limits, length(mainMapper.cigars.limits) - 1));
 
@@ -531,10 +531,10 @@ void configureMapper(Options const & options,
     }
     else
     {
-#ifdef YARA_LARGE_CONTIGS
+#ifdef DR_YARA_LARGE_CONTIGS
         configureMapper<TContigsSize, uint64_t>(options, mainMapper, disOptions, threading, sequencing, distance);
 #else
-        throw RuntimeError("Maximum contig length exceeded. Recompile with -DYARA_LARGE_CONTIGS=ON.");
+        throw RuntimeError("Maximum contig length exceeded. Recompile with -DDR_YARA_LARGE_CONTIGS=ON.");
 #endif
     }
 }
@@ -558,7 +558,7 @@ void configureMapper(Options const & options,
     }
     else
     {
-#ifdef YARA_LARGE_CONTIGS
+#ifdef DR_YARA_LARGE_CONTIGS
         configureMapper<uint32_t>(options, mainMapper, disOptions, TThreading(), TSequencing(), TSeedsDistance());
 #else
         throw RuntimeError("Maximum number of contigs exceeded. Recompile with -DYARA_LARGE_CONTIGS=ON.");
@@ -597,7 +597,7 @@ inline void loadAllContigs(Mapper<TSpec, TConfig> & mainMapper, DisOptions & dis
     }
     stop(mainMapper.timer);
     mainMapper.stats.loadContigs += getValue(mainMapper.timer);
-    
+
     if (mainMapper.options.verbose > 1)
         std::cerr << "Loading reference:\t\t\t" << mainMapper.timer << std::endl;
 }
@@ -625,54 +625,54 @@ inline void rankMatches2(Mapper<TSpec, TConfig> & me, TReadSeqs const & readSeqs
     assign(me.matchesPositions, seqan::Range<TMatchesSize>(0, length(me.matchesByCoord)), Exact());
     setHost(me.matchesByErrors, me.matchesByCoord);
     setCargo(me.matchesByErrors, me.matchesPositions);
-    
+
     // Bucket matches in the position modifier.
     setHost(me.matchesSetByErrors, me.matchesByErrors);
     assign(stringSetLimits(me.matchesSetByErrors), stringSetLimits(me.matchesSetByCoord), Exact());
     assign(stringSetPositions(me.matchesSetByErrors), stringSetPositions(me.matchesSetByCoord), Exact());
-    
+
     // Sort matches by pairing info. iff possible
 
     // Sort matches by errors.
     forEach(me.matchesSetByErrors, sortMatches<TMatchesViewSetValue, Errors>, typename TTraits::TThreading());
-    
+
     // Select all co-optimal matches.
     assign(me.optimalMatchesSet, me.matchesSetByErrors);
     clipMatches(me.optimalMatchesSet, countMatchesInBestStratum<TMatchesViewSetValue>, typename TTraits::TThreading());
-    
+
     // Select all sub-optimal matches.
     assign(me.matchesSet, me.matchesSetByErrors);
     clipMatches(me.matchesSet, [&](TMatchesViewSetValue const & matches)
                 {
                     if (empty(matches)) return TMatchesSize(0);
-                    
+
                     TReadId readId = getMember(front(matches), ReadId());
-                    
+
                     return countMatchesInStrata(matches, getReadStrata<TMatch>(me.options, length(readSeqs[readId])));
                 },
                 typename TTraits::TThreading());
-    
+
     // Append an invalid match to matches by coord.
     resize(me.matchesByCoord, length(me.matchesByCoord) + 1, Exact());
     setInvalid(back(me.matchesByCoord));
     // Update matches by errors.
     resize(me.matchesPositions, length(me.matchesPositions) + 1, Exact());
     setPosition(me.matchesByErrors, length(me.matchesByErrors) - 1, length(me.matchesByCoord) - 1);
-    
+
     // Initialize primary matches.
     setHost(me.primaryMatches, me.matchesByErrors);
     assign(me.primaryMatchesPositions, stringSetPositions(me.matchesSetByErrors), Exact());
     setCargo(me.primaryMatches, me.primaryMatchesPositions);
-    
+
     // Choose primary matches among best matches.
     iterate(me.optimalMatchesSet, [&](TMatchesViewSetIt const & matchesIt)
             {
                 // Use one generator per thread.
                 std::default_random_engine generator;
-                
+
                 TReadId readId = position(matchesIt, me.optimalMatchesSet);
                 TMatchesViewSetValue const & matches = value(matchesIt);
-                
+
                 // Set unmapped reads as invalid.
                 if (empty(matches))
                 {
@@ -686,20 +686,20 @@ inline void rankMatches2(Mapper<TSpec, TConfig> & me, TReadSeqs const & readSeqs
                 }
             },
             Standard(), typename TTraits::TThreading());
-    
+
     stop(me.timer);
     me.stats.sortMatches += getValue(me.timer);
     if (me.options.verbose > 1)
         std::cerr << "Sorting time:\t\t\t" << me.timer << std::endl;
-    
+
     // Update mapped reads.
     transform(me.ctx.mapped, me.primaryMatches, isValid<typename TTraits::TMatchSpec>, typename TTraits::TThreading());
-    
+
     if (me.options.verbose > 0)
     {
         unsigned long mappedReads = count(me.ctx.mapped, true, typename TTraits::TThreading());
         me.stats.mappedReads += mappedReads;
-        
+
         if (me.options.verbose > 1)
             std::cerr << "Mapped reads:\t\t\t" << mappedReads << std::endl;
     }
@@ -730,9 +730,9 @@ inline void openOutputFile(Mapper<TSpec, TConfig> & mainMapper, DisOptions & dis
     typedef typename TTraits::TContigs              TContigs;
     typedef typename TTraits::TContigSeqs           TContigSeqs;
     typedef typename Value<TContigSeqs>::Type       TContigSeq;
-    
+
     String<uint32_t> allContigLengths;
-    
+
     start(mainMapper.timer);
     try
     {
@@ -742,10 +742,10 @@ inline void openOutputFile(Mapper<TSpec, TConfig> & mainMapper, DisOptions & dis
             String<uint32_t> tmpContigLengths;
             CharString fileName;
             appendFileName(fileName, disOptions.IndicesDirectory, i);
-            
+
             if (!open(tmpContigs, toCString(fileName), OPEN_RDONLY))
                 throw RuntimeError("Error while opening reference file.");
-            
+
             resize(tmpContigLengths, length(tmpContigs.seqs));
             transform(tmpContigLengths, tmpContigs.seqs, [](TContigSeq const & seq) { return length(seq); });
             append(allContigLengths, tmpContigLengths);
@@ -759,12 +759,12 @@ inline void openOutputFile(Mapper<TSpec, TConfig> & mainMapper, DisOptions & dis
     }
     stop(mainMapper.timer);
     mainMapper.stats.loadContigs += getValue(mainMapper.timer);
-    
+
     if (mainMapper.options.verbose > 1)
         std::cerr << "Loading reference:\t\t\t" << mainMapper.timer << std::endl;
 
     bool opened = false;
-    
+
     if (empty(mainMapper.options.outputFile))
     {
         // Output to cout.
@@ -784,15 +784,15 @@ inline void openOutputFile(Mapper<TSpec, TConfig> & mainMapper, DisOptions & dis
         // Output to file.
         opened = open(mainMapper.outputFile, toCString(mainMapper.options.outputFile), OPEN_WRONLY | OPEN_CREATE);
     }
-    
+
     if (!opened) throw RuntimeError("Error while opening output file.");
-    
+
     setContigNames(context(mainMapper.outputFile), mainMapper.contigs.names);
-    
+
     // Fill contig lengths.
     resize(contigLengths(context(mainMapper.outputFile)), length(allContigLengths));
     assign(contigLengths(context(mainMapper.outputFile)), allContigLengths);
-    
+
     typedef FileFormat<BamFileOut>::Type    TOutputFormat;
     TOutputFormat of;
     assign(of, Bam());

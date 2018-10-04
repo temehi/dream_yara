@@ -425,10 +425,10 @@ void configureDisMapper(DisOptions & disOptions,
     }
     else
     {
-#ifdef YARA_LARGE_CONTIGS
+#ifdef DR_YARA_LARGE_CONTIGS
         configureDisMapper<TContigsSize, uint64_t>(disOptions, threading, sequencing, distance);
 #else
-        throw RuntimeError("Maximum contig length exceeded. Recompile with -DYARA_LARGE_CONTIGS=ON.");
+        throw RuntimeError("Maximum contig length exceeded. Recompile with -DDR_YARA_LARGE_CONTIGS=ON.");
 #endif
     }
 }
