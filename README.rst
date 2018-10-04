@@ -1,4 +1,4 @@
-(DREAM-)Yara - An exact read mapper for very large databases with short update time
+DREAM-Yara: An exact read mapper for very large databases with short update time
 ===================================================================================
 
 Overview
@@ -25,7 +25,7 @@ Main features
 Supported data
 ~~~~~~~~~~~~~~
 
-Yara has been tested on DNA reads (i.e., Whole Genome, Exome, ChIP-seq, MeDIP-seq) produced by the following sequencing platforms:
+DREAM-Yara has been tested on DNA reads (i.e., Whole Genome, Exome, ChIP-seq, MeDIP-seq) produced by the following sequencing platforms:
 
 * Illumina GA II, HiSeq and MiSeq (single-end and paired-end).
 * Life Technologies Ion Torrent Proton and PGM.
@@ -55,7 +55,7 @@ Software requirements
 Download
 ~~~~~~~~
 
-(DREAM-)Yara sources downloaded by executing:
+DREAM-Yara sources downloaded by executing:
 
 ::
 
@@ -93,58 +93,6 @@ Copy the binaries to a folder in your *PATH*, e.g.:
 
 Usage
 -----
-
-Yara consists of two executables:
-
-* **yara_indexer** builds the index of a reference genome.
-* **yara_mapper** maps DNA reads on the indexed reference genome.
-* **dream_yara_indexer** builds distributed indices of multiple reference genome .
-* **dream_yara_build_filter** builds an interlieaved Bloom filter for distributed indices.
-* **dream_yara_update_filter** updates an interlieaved Bloom filter for distributed indices.
-* **dream_yara_mapper** maps DNA reads on the distributed indices.
-
-This document explains only basic usage. To get complete usage descriptions, invoke each tool with -h or --help.
-
-Indexer
-~~~~~~~
-
-Index a reference genome *REF.fasta.gz* by executing:
-
-::
-
-  $ yara_indexer REF.fasta.gz -o REF.index
-
-**The indexer needs at least 25 times the space of the uncompressed reference genome**.
-Be sure to dispose of that space inside the output folder.
-The tool will take about one-two hours to index the human reference genome.
-On success, the tool will create various files called *REF.index.**.
-
-**The indexer does not work over GPFS and may have problems on other network filesystems**.
-
-Mapper
-~~~~~~
-
-Single-end reads
-^^^^^^^^^^^^^^^^
-
-Map single-end DNA reads on the indexed reference genome by executing:
-
-::
-
-  $ yara_mapper REF.index READS.fastq.gz -o READS.bam
-
-By default, the tool will report all co-optimal mapping locations per read within an error rate of 5%.
-The results will be stored in a BAM file called *READS.bam*.
-
-Paired-end reads
-^^^^^^^^^^^^^^^^
-
-Map paired-end reads by providing two DNA read files:
-
-::
-
-  $ yara_mapper REF.index READS_1.fastq.gz READS_2.fastq.gz -o READS.bam
-
 
 
 Distributed Indexer
@@ -209,11 +157,11 @@ In addition, Yara generates the following optional tags:
 Contact
 -------
 
-For questions or comments, feel free to contact: Enrico Siragusa <enrico.siragusa@fu-berlin.de>
+For questions or comments, feel free to contact: Temesgen H. Dadi <temesgen.dadi@fu-berlin.de>
 
 
 References
 ----------
-
-1. Siragusa, E. (2015). Approximate string matching for high-throughput sequencing. PhD Dissertation, Free University of Berlin.
-2. Siragusa, E., Weese D., and Reinert, K. (2013). Fast and accurate read mapping with approximate seeds and multiple backtracking. Nucleic Acids Research, 2013, 1–8.
+Dadi, T. H., Siragusa, E., Piro, V. C., Andrusch, A., Seiler, E., Renard, B. Y., & Reinert, K. (2018).
+DREAM-Yara: An exact read mapper for very large databases with short update time.
+BioRxiv, 256354. https://doi.org/10.1101/256354
