@@ -65,6 +65,7 @@ struct Options;
 #include <seqan/sequence.h>
 #include <seqan/index.h>
 #include <seqan/parallel.h>
+#include <seqan/binning_directory.h>
 
 // ----------------------------------------------------------------------------
 // App headers
@@ -88,8 +89,6 @@ struct Options;
 #include "find_extender.h"
 #include "misc_options.h"
 #include "d_misc_options.h"
-#include "d_kdx_filter.h"
-#include "d_bloom_filter.h"
 #include "mapper_collector.h"
 #include "mapper_classifier.h"
 #include "mapper_ranker.h"
@@ -111,7 +110,7 @@ using namespace seqan;
 // ----------------------------------------------------------------------------
 // Function setupArgumentParser()
 // ----------------------------------------------------------------------------
-void setupArgumentParser(ArgumentParser & parser, DisOptions const & disOptions)
+void setupArgumentParser(ArgumentParser & parser, DisOptions const & d_options)
 {
     setAppName(parser, "dream_yara_mapper");
     setShortDescription(parser, "DREAM-Yara Mapper");
@@ -134,7 +133,7 @@ void setupArgumentParser(ArgumentParser & parser, DisOptions const & disOptions)
     addOption(parser, ArgParseOption("v", "verbose", "Displays global statistics."));
     addOption(parser, ArgParseOption("vv", "very-verbose", "Displays extensive statistics for each batch of reads."));
 
-    // Setup output disOptions.
+    // Setup output d_options.
     addSection(parser, "Output Options");
 
     addOption(parser, ArgParseOption("o", "output-file", "Specify an output file. Default: write the file to standard output.",
@@ -154,13 +153,13 @@ void setupArgumentParser(ArgumentParser & parser, DisOptions const & disOptions)
 
     addOption(parser, ArgParseOption("rg", "read-group", "Specify a read group for all records in the SAM/BAM file.",
                                      ArgParseOption::STRING));
-    setDefaultValue(parser, "read-group", disOptions.readGroup);
+    setDefaultValue(parser, "read-group", d_options.readGroup);
     addOption(parser, ArgParseOption("sm", "secondary-matches", "Specify whether to output secondary matches in \
                                      the XA tag of the primary alignment, as separate \
                                      secondary records, or to omit them.",
                                      ArgParseOption::STRING));
-    setValidValues(parser, "secondary-matches", disOptions.secondaryMatchesList);
-    setDefaultValue(parser, "secondary-matches", disOptions.secondaryMatchesList[disOptions.secondaryMatches]);
+    setValidValues(parser, "secondary-matches", d_options.secondaryMatchesList);
+    setDefaultValue(parser, "secondary-matches", d_options.secondaryMatchesList[d_options.secondaryMatches]);
 
     // Keep legacy option to display an error
     addOption(parser, ArgParseOption("sa", "secondary-alignments", "This option has been renamed to 'secondary-matches'.",
@@ -176,7 +175,7 @@ void setupArgumentParser(ArgumentParser & parser, DisOptions const & disOptions)
 
     addOption(parser, ArgParseOption("sk", "skip-sam-headers", "Skip writing SQ: headers to SAM output (works only with SAM format)."));
 
-    // Setup mapping disOptions.
+    // Setup mapping d_options.
     addSection(parser, "Mapping Options");
 
     addOption(parser, ArgParseOption("e", "error-rate", "Consider alignments within this percentual number of errors. \
@@ -185,7 +184,7 @@ void setupArgumentParser(ArgumentParser & parser, DisOptions const & disOptions)
                                      ArgParseOption::INTEGER));
     setMinValue(parser, "error-rate", "0");
     setMaxValue(parser, "error-rate", "10");
-    setDefaultValue(parser, "error-rate", 100.0 * disOptions.errorRate);
+    setDefaultValue(parser, "error-rate", 100.0 * d_options.errorRate);
 
     addOption(parser, ArgParseOption("s", "strata-rate", "Consider suboptimal alignments within this percentual number \
                                      of errors from the optimal alignment. Increase this threshold to increase \
@@ -193,17 +192,17 @@ void setupArgumentParser(ArgumentParser & parser, DisOptions const & disOptions)
                                      ArgParseOption::INTEGER));
     setMinValue(parser, "strata-rate", "0");
     setMaxValue(parser, "strata-rate", "10");
-    setDefaultValue(parser, "strata-rate", 100.0 * disOptions.strataRate);
+    setDefaultValue(parser, "strata-rate", 100.0 * d_options.strataRate);
 
     addOption(parser, ArgParseOption("y", "sensitivity", "Sensitivity with respect to edit distance. \
                                      Full sensitivity guarantees to find all considered alignments \
                                      but increases runtime, low sensitivity decreases runtime by \
                                      breaking such guarantee.",
                                      ArgParseOption::STRING));
-    setValidValues(parser, "sensitivity", disOptions.sensitivityList);
-    setDefaultValue(parser, "sensitivity", disOptions.sensitivityList[disOptions.sensitivity]);
+    setValidValues(parser, "sensitivity", d_options.sensitivityList);
+    setDefaultValue(parser, "sensitivity", d_options.sensitivityList[d_options.sensitivity]);
 
-    // Setup paired-end mapping disOptions.
+    // Setup paired-end mapping d_options.
     addSection(parser, "Paired-End Mapping Options");
 
     addOption(parser, ArgParseOption("ll", "library-length", "Expected library length. Default: autodetected.",
@@ -218,45 +217,45 @@ void setupArgumentParser(ArgumentParser & parser, DisOptions const & disOptions)
                                      ArgParseOption::INTEGER));
     setMinValue(parser, "indel-rate", "0");
     setMaxValue(parser, "indel-rate", "50");
-    setDefaultValue(parser, "indel-rate", 100.0 * disOptions.indelRate);
+    setDefaultValue(parser, "indel-rate", 100.0 * d_options.indelRate);
 
     addOption(parser, ArgParseOption("ni", "no-indels", "Turn off the rescue of unaligned ends containing indels."));
 
     //    addOption(parser, ArgParseOption("lo", "library-orientation", "Expected orientation of the segments in the library.",
     //                                     ArgParseOption::STRING));
-    //    setValidValues(parser, "library-orientation", disOptions.libraryOrientationList);
-    //    setDefaultValue(parser, "library-orientation", disOptions.libraryOrientationList[disOptions.libraryOrientation]);
+    //    setValidValues(parser, "library-orientation", d_options.libraryOrientationList);
+    //    setDefaultValue(parser, "library-orientation", d_options.libraryOrientationList[d_options.libraryOrientation]);
 
     //    addOption(parser, ArgParseOption("la", "anchor", "Anchor one read and verify its mate."));
 
-    // Setup performance disOptions.
+    // Setup performance d_options.
     addSection(parser, "Performance Options");
 
     addOption(parser, ArgParseOption("t", "threads", "Specify the number of threads to use.", ArgParseOption::INTEGER));
     setMinValue(parser, "threads", "1");
     setMaxValue(parser, "threads", "2048");
-    setDefaultValue(parser, "threads", disOptions.threadsCount);
+    setDefaultValue(parser, "threads", d_options.threadsCount);
 
     addOption(parser, ArgParseOption("rb", "reads-batch", "Specify the number of reads to process in one batch.",
                                      ArgParseOption::INTEGER));
 
     setMinValue(parser, "reads-batch", "1000");
     setMaxValue(parser, "reads-batch", "5000000");
-    setDefaultValue(parser, "reads-batch", disOptions.readsCount);
+    setDefaultValue(parser, "reads-batch", d_options.readsCount);
     hideOption(getOption(parser, "reads-batch"));
 
-    // Setup Distributed mapper disOptions.
+    // Setup Distributed mapper d_options.
     addSection(parser, "Distributed mapper Options");
 //    addOption(parser, ArgParseOption("b", "number-of-bins", "The number of bins (indices) for distributed mapper",
 //                                     ArgParseOption::INTEGER));
 //    setMinValue(parser, "number-of-bins", "1");
 //    setMaxValue(parser, "number-of-bins", "1024");
-//    setDefaultValue(parser, "number-of-bins", disOptions.numberOfBins);
+//    setDefaultValue(parser, "number-of-bins", d_options.numberOfBins);
 
     addOption(parser, ArgParseOption("ft", "filter-type", "type of filter to build",
                                      ArgParseOption::STRING));
-    setValidValues(parser, "filter-type", disOptions.filterTypeList);
-    setDefaultValue(parser, "filter-type",  disOptions.filterTypeList[disOptions.filterType]);
+    setValidValues(parser, "filter-type", d_options.filter_typeList);
+    setDefaultValue(parser, "filter-type",  d_options.filter_typeList[d_options.filter_type]);
 
 
     addOption(parser, ArgParseOption("fi", "bloom-filter", "The path to a bloom filter. Default: will look for bloom.filter file inside the indices directory.", ArgParseOption::INPUT_FILE));
@@ -268,7 +267,7 @@ void setupArgumentParser(ArgumentParser & parser, DisOptions const & disOptions)
 // ----------------------------------------------------------------------------
 
 ArgumentParser::ParseResult
-parseCommandLine(DisOptions & disOptions, ArgumentParser & parser, int argc, char const ** argv)
+parseCommandLine(DisOptions & d_options, ArgumentParser & parser, int argc, char const ** argv)
 {
     ArgumentParser::ParseResult res = parse(parser, argc, argv);
 
@@ -276,22 +275,22 @@ parseCommandLine(DisOptions & disOptions, ArgumentParser & parser, int argc, cha
         return res;
 
     // Parse indexed genome input file.
-    getArgumentValue(disOptions.IndicesDirectory, parser, 0);
+    getArgumentValue(d_options.indices_dir, parser, 0);
 
     // Append trailing slash if it doesn't exist.
-    appendTrailingSlash(disOptions.IndicesDirectory);
+    append_trailing_slash(d_options.indices_dir);
 
     // Parse read input files.
     switch (getArgumentValueCount(parser, 1))
     {
         case 1:
-            getArgumentValue(disOptions.readsFile.i1, parser, 1, 0);
-            disOptions.singleEnd = true;
+            getArgumentValue(d_options.readsFile.i1, parser, 1, 0);
+            d_options.singleEnd = true;
             break;
         case 2:
-            getArgumentValue(disOptions.readsFile.i1, parser, 1, 0);
-            getArgumentValue(disOptions.readsFile.i2, parser, 1, 1);
-            disOptions.singleEnd = false;
+            getArgumentValue(d_options.readsFile.i1, parser, 1, 0);
+            getArgumentValue(d_options.readsFile.i2, parser, 1, 1);
+            d_options.singleEnd = false;
             break;
         default:
             std::cerr << getAppName(parser) << ": Too many arguments!" << std::endl;
@@ -299,26 +298,26 @@ parseCommandLine(DisOptions & disOptions, ArgumentParser & parser, int argc, cha
     }
 
     // Parse output file.
-    getOptionValue(disOptions.superOutputFile, parser, "output-file");
+    getOptionValue(d_options.super_output_file, parser, "output-file");
 
     // Parse output format.
     CharString outputFormat;
     if (getOptionValue(outputFormat, parser, "output-format"))
     {
         addLeadingDot(outputFormat);
-        guessFormatFromFilename(outputFormat, disOptions.outputFormat);
+        guessFormatFromFilename(outputFormat, d_options.outputFormat);
     }
     else
-        assign(disOptions.outputFormat, Sam());
+        assign(d_options.outputFormat, Sam());
 
 #if SEQAN_HAS_ZLIB
-    getOptionValue(disOptions.uncompressedBam, parser, "uncompressed-bam");
+    getOptionValue(d_options.uncompressedBam, parser, "uncompressed-bam");
 #endif
 
-    // Parse output disOptions.
-    getOptionValue(disOptions.readGroup, parser, "read-group");
-    getOptionValue(disOptions.secondaryMatches, parser, "secondary-alignments", disOptions.secondaryMatchesList);
-    getOptionValue(disOptions.rabema, parser, "rabema-alignments");
+    // Parse output d_options.
+    getOptionValue(d_options.readGroup, parser, "read-group");
+    getOptionValue(d_options.secondaryMatches, parser, "secondary-alignments", d_options.secondaryMatchesList);
+    getOptionValue(d_options.rabema, parser, "rabema-alignments");
 
     if (isSet(parser, "secondary-alignments"))
     {
@@ -327,68 +326,68 @@ parseCommandLine(DisOptions & disOptions, ArgumentParser & parser, int argc, cha
     }
 
     // Turn off for DREAM-Yara temporarly till matches and cigar managment is handeled properly
-    // getOptionValue(disOptions.alignSecondary, parser, "align-secondary");
-    // if (disOptions.alignSecondary && disOptions.secondaryMatches == OMIT)
+    // getOptionValue(d_options.alignSecondary, parser, "align-secondary");
+    // if (d_options.alignSecondary && d_options.secondaryMatches == OMIT)
     // {
-    //     disOptions.alignSecondary = false;
+    //     d_options.alignSecondary = false;
     //     std::cerr << getAppName(parser) << ": WARNING, ignoring '-as' as '-sa omit' is set." << std::endl;
     // }
 
-    if (isSet(parser, "skip-sam-headers")) disOptions.skipSamHeader = true;
+    if (isSet(parser, "skip-sam-headers")) d_options.skip_sam_header = true;
 
-    // Parse mapping disOptions.
+    // Parse mapping d_options.
     unsigned errorRate;
     if (getOptionValue(errorRate, parser, "error-rate"))
-        disOptions.errorRate = errorRate / 100.0;
+        d_options.errorRate = errorRate / 100.0;
 
     unsigned strataRate;
     if (getOptionValue(strataRate, parser, "strata-rate"))
-        disOptions.strataRate = strataRate / 100.0;
+        d_options.strataRate = strataRate / 100.0;
 
-    getOptionValue(disOptions.sensitivity, parser, "sensitivity", disOptions.sensitivityList);
+    getOptionValue(d_options.sensitivity, parser, "sensitivity", d_options.sensitivityList);
 
-    // Parse paired-end mapping disOptions.
-    getOptionValue(disOptions.libraryLength, parser, "library-length");
-    getOptionValue(disOptions.libraryDev, parser, "library-deviation");
-    //    getOptionValue(disOptions.libraryOrientation, parser, "library-orientation", disOptions.libraryOrientationList);
+    // Parse paired-end mapping d_options.
+    getOptionValue(d_options.libraryLength, parser, "library-length");
+    getOptionValue(d_options.libraryDev, parser, "library-deviation");
+    //    getOptionValue(d_options.libraryOrientation, parser, "library-orientation", d_options.libraryOrientationList);
 
     unsigned indelRate;
     if (getOptionValue(indelRate, parser, "indel-rate"))
-        disOptions.indelRate = indelRate / 100.0;
+        d_options.indelRate = indelRate / 100.0;
 
-    disOptions.verifyMatches = !isSet(parser, "no-indels");
+    d_options.verifyMatches = !isSet(parser, "no-indels");
 
-    // Parse performance disOptions.
-    getOptionValue(disOptions.threadsCount, parser, "threads");
-    getOptionValue(disOptions.readsCount, parser, "reads-batch");
+    // Parse performance d_options.
+    getOptionValue(d_options.threadsCount, parser, "threads");
+    getOptionValue(d_options.readsCount, parser, "reads-batch");
 
 //    // Parse Distributed mapper options
-//    getOptionValue(disOptions.numberOfBins, parser, "number-of-bins");
-//    if (isSet(parser, "number-of-bins")) getOptionValue(disOptions.numberOfBins, parser, "number-of-bins");
+//    getOptionValue(d_options.numberOfBins, parser, "number-of-bins");
+//    if (isSet(parser, "number-of-bins")) getOptionValue(d_options.numberOfBins, parser, "number-of-bins");
 
     // Parse contigs index prefix.
-    getOptionValue(disOptions.filterFile, parser, "bloom-filter");
+    getOptionValue(d_options.filter_file, parser, "bloom-filter");
     if (!isSet(parser, "bloom-filter"))
     {
-        disOptions.filterFile = disOptions.IndicesDirectory;
-        append(disOptions.filterFile, "bloom.filter");
+        d_options.filter_file = d_options.indices_dir;
+        append(d_options.filter_file, "bloom.filter");
     }
 
-    getOptionValue(disOptions.filterType, parser, "filter-type", disOptions.filterTypeList);
+    getOptionValue(d_options.filter_type, parser, "filter-type", d_options.filter_typeList);
 
-    if (isSet(parser, "verbose")) disOptions.verbose = 1;
-    if (isSet(parser, "very-verbose")) disOptions.verbose = 2;
+    if (isSet(parser, "verbose")) d_options.verbose = 1;
+    if (isSet(parser, "very-verbose")) d_options.verbose = 2;
 
     // Get version.
-    disOptions.version = getVersion(parser);
+    d_options.version = getVersion(parser);
 
     // Get command line.
     for (int i = 0; i < argc; i++)
     {
-        append(disOptions.commandLine, argv[i]);
-        appendValue(disOptions.commandLine, ' ');
+        append(d_options.commandLine, argv[i]);
+        appendValue(d_options.commandLine, ' ');
     }
-    eraseBack(disOptions.commandLine);
+    eraseBack(d_options.commandLine);
 
     return ArgumentParser::PARSE_OK;
 }
@@ -398,35 +397,35 @@ parseCommandLine(DisOptions & disOptions, ArgumentParser & parser, int argc, cha
 // ----------------------------------------------------------------------------
 
 template <typename TContigsSize, typename TContigsLen, typename TThreading, typename TSequencing, typename TSeedsDistance>
-void configureDisMapper(DisOptions & disOptions,
+void configure_d_mapper(DisOptions & d_options,
                         TThreading const & threading,
                         TSequencing const & sequencing,
                         TSeedsDistance const & distance)
 {
-    if (disOptions.contigsSum <= MaxValue<uint32_t>::VALUE)
+    if (d_options.contigsSum <= MaxValue<uint32_t>::VALUE)
     {
-        spawnDisMapper<TContigsSize, TContigsLen, uint32_t>(disOptions, threading, sequencing, distance);
+        spawn_d_mapper<TContigsSize, TContigsLen, uint32_t>(d_options, threading, sequencing, distance);
     }
     else
     {
-        spawnDisMapper<TContigsSize, TContigsLen, uint64_t>(disOptions, threading, sequencing, distance);
+        spawn_d_mapper<TContigsSize, TContigsLen, uint64_t>(d_options, threading, sequencing, distance);
     }
 }
 
 template <typename TContigsSize, typename TThreading, typename TSequencing, typename TSeedsDistance>
-void configureDisMapper(DisOptions & disOptions,
+void configure_d_mapper(DisOptions & d_options,
                         TThreading const & threading,
                         TSequencing const & sequencing,
                         TSeedsDistance const & distance)
 {
-    if (disOptions.contigsMaxLength <= MaxValue<uint32_t>::VALUE)
+    if (d_options.contigsMaxLength <= MaxValue<uint32_t>::VALUE)
     {
-        configureDisMapper<TContigsSize, uint32_t>(disOptions, threading, sequencing, distance);
+        configure_d_mapper<TContigsSize, uint32_t>(d_options, threading, sequencing, distance);
     }
     else
     {
 #ifdef DR_YARA_LARGE_CONTIGS
-        configureDisMapper<TContigsSize, uint64_t>(disOptions, threading, sequencing, distance);
+        configure_d_mapper<TContigsSize, uint64_t>(d_options, threading, sequencing, distance);
 #else
         throw RuntimeError("Maximum contig length exceeded. Recompile with -DDR_YARA_LARGE_CONTIGS=ON.");
 #endif
@@ -434,115 +433,115 @@ void configureDisMapper(DisOptions & disOptions,
 }
 
 template <typename TThreading, typename TSequencing, typename TSeedsDistance>
-void configureDisMapper(DisOptions & disOptions,
+void configure_d_mapper(DisOptions & d_options,
                         TThreading const & threading,
                         TSequencing const & sequencing,
                         TSeedsDistance const & distance)
 {
-    disOptions.contigsMaxLength = 0;
-    disOptions.contigsSize = 0;
-    disOptions.contigsSum = 0;
-    disOptions.contigOffsets.resize(disOptions.numberOfBins, 0);
+    d_options.contigsMaxLength = 0;
+    d_options.contigsSize = 0;
+    d_options.contigsSum = 0;
+    d_options.contig_offsets.resize(d_options.number_of_bins, 0);
     // We aggregate individual limit here to configure the dis_mapper limits
-    for (uint32_t i=0; i < disOptions.numberOfBins; ++i)
+    for (uint32_t i=0; i < d_options.number_of_bins; ++i)
     {
-        disOptions.contigOffsets[i] = disOptions.contigsSize;
-        Options options = disOptions;
-        appendFileName(options.contigsIndexFile, disOptions.IndicesDirectory, i);
+        d_options.contig_offsets[i] = d_options.contigsSize;
+        Options options = d_options;
+        append_file_name(options.contigsIndexFile, d_options.indices_dir, i);
         if (!openContigsLimits(options))
             throw RuntimeError("Error while opening contig limits file.");
 
-       disOptions.contigsMaxLength   = std::max(options.contigsMaxLength, disOptions.contigsMaxLength);
-       disOptions.contigsSize       += options.contigsSize;
-       disOptions.contigsSum        += options.contigsSum;
+       d_options.contigsMaxLength   = std::max(options.contigsMaxLength, d_options.contigsMaxLength);
+       d_options.contigsSize       += options.contigsSize;
+       d_options.contigsSum        += options.contigsSum;
     }
 
-    if (disOptions.contigsSize <= MaxValue<uint8_t>::VALUE)
+    if (d_options.contigsSize <= MaxValue<uint8_t>::VALUE)
     {
-        configureDisMapper<uint8_t>(disOptions, threading, sequencing, distance);
+        configure_d_mapper<uint8_t>(d_options, threading, sequencing, distance);
     }
-    else if (disOptions.contigsSize <= MaxValue<uint16_t>::VALUE)
+    else if (d_options.contigsSize <= MaxValue<uint16_t>::VALUE)
     {
-        configureDisMapper<uint16_t>(disOptions, threading, sequencing, distance);
+        configure_d_mapper<uint16_t>(d_options, threading, sequencing, distance);
     }
     else
     {
-        configureDisMapper<uint32_t>(disOptions, threading, sequencing, distance);
+        configure_d_mapper<uint32_t>(d_options, threading, sequencing, distance);
     }
 }
 
 template <typename TThreading, typename TSequencing>
-void configureDisMapper(DisOptions & disOptions,
+void configure_d_mapper(DisOptions & d_options,
                         TThreading const & threading,
                         TSequencing const & sequencing)
 {
-    if (disOptions.sensitivity == FULL)
-        return configureDisMapper(disOptions, threading, sequencing, EditDistance());
+    if (d_options.sensitivity == FULL)
+        return configure_d_mapper(d_options, threading, sequencing, EditDistance());
     else
-        return configureDisMapper(disOptions, threading, sequencing, HammingDistance());
+        return configure_d_mapper(d_options, threading, sequencing, HammingDistance());
 }
 
 template <typename TThreading>
-void configureDisMapper(DisOptions & disOptions,
+void configure_d_mapper(DisOptions & d_options,
                         TThreading const & threading)
 {
-    if (disOptions.singleEnd)
-        configureDisMapper(disOptions, threading, SingleEnd());
+    if (d_options.singleEnd)
+        configure_d_mapper(d_options, threading, SingleEnd());
     else
-        configureDisMapper(disOptions, threading, PairedEnd());
+        configure_d_mapper(d_options, threading, PairedEnd());
 }
 
-void configureDisMapper(DisOptions & disOptions)
+void configure_d_mapper(DisOptions & d_options)
 {
 #ifdef _OPENMP
-    if (disOptions.threadsCount > 1)
-        configureDisMapper(disOptions, Parallel());
+    if (d_options.threadsCount > 1)
+        configure_d_mapper(d_options, Parallel());
     else
 #endif
-        configureDisMapper(disOptions, Serial());
+        configure_d_mapper(d_options, Serial());
 }
 
 // ----------------------------------------------------------------------------
-// Function checkReadFiles()
+// Function check_read_files()
 // ----------------------------------------------------------------------------
 //
-bool checkReadFiles(DisOptions const &  disOptions)
+bool check_read_files(DisOptions const &  d_options)
 {
     // check if read file(s) exist(s)
-    SeqFileIn seqFile;
-    if (!open(seqFile, toCString(disOptions.readsFile.i1)))
+    SeqFileIn seq_file_in;
+    if (!open(seq_file_in, toCString(d_options.readsFile.i1)))
     {
-        std::cerr << "Unable to open read file "<< toCString(disOptions.readsFile.i1) <<"!\n";
+        std::cerr << "Unable to open read file "<< toCString(d_options.readsFile.i1) <<"!\n";
         return false;
     }
-    close(seqFile);
-    if (!disOptions.singleEnd && !open(seqFile, toCString(disOptions.readsFile.i2)))
+    close(seq_file_in);
+    if (!d_options.singleEnd && !open(seq_file_in, toCString(d_options.readsFile.i2)))
     {
-        std::cerr << "Unable to open read file "<< toCString(disOptions.readsFile.i2) <<"!\n";
+        std::cerr << "Unable to open read file "<< toCString(d_options.readsFile.i2) <<"!\n";
         return false;
     }
-    close(seqFile);
+    close(seq_file_in);
     return true;
 }
 
 // ----------------------------------------------------------------------------
-// Function readFilterMetadata()
+// Function read_filter_metadata()
 // ----------------------------------------------------------------------------
-//
-bool readFilterMetadata(DisOptions &  disOptions)
-{
-    std::ifstream  in(toCString(disOptions.filterFile), std::ios::in | std::ios::binary);
-    uint64_t x = filterMetadataSize/8; //bits -> bytes
 
-    sdsl::int_vector<64>  metadataVec(filterMetadataSize/64, 0); //bits -> uint64_t
+bool read_filter_metadata(DisOptions &  d_options)
+{
+    std::ifstream in(toCString(d_options.filter_file), std::ios::in | std::ios::binary);
+    uint64_t x = BD_METADATA_SIZE/8; //bits -> bytes
+
+    sdsl::int_vector<64>  metadata_vec(BD_METADATA_SIZE/64, 0); //bits -> uint64_t
     in.seekg(-x, in.end); // seek from end of file
 
-    uint64_t* p  = &(metadataVec[0]);
+    uint64_t* p  = &(metadata_vec[0]);
     in.read((char*)p, x * sizeof(uint64_t));
 
-//    std::cout << metadataVec << std::endl;
-    disOptions.numberOfBins = metadataVec[0];
-    disOptions.kmerSize = metadataVec[2];
+//    std::cout << metadata_vec << std::endl;
+    d_options.number_of_bins = metadata_vec[0];
+    d_options.kmer_size = metadata_vec[2];
 
     return true;
 }
@@ -554,26 +553,26 @@ bool readFilterMetadata(DisOptions &  disOptions)
 int main(int argc, char const ** argv)
 {
     ArgumentParser parser;
-    DisOptions disOptions;
-    setupArgumentParser(parser, disOptions);
+    DisOptions d_options;
+    setupArgumentParser(parser, d_options);
 
-    ArgumentParser::ParseResult res = parseCommandLine(disOptions, parser, argc, argv);
+    ArgumentParser::ParseResult res = parseCommandLine(d_options, parser, argc, argv);
 
     if (res != ArgumentParser::PARSE_OK)
         return res == ArgumentParser::PARSE_ERROR;
 
-    if (!readFilterMetadata(disOptions))
+    if (!read_filter_metadata(d_options))
         return 1;
 
-    if (!verifyIndicesDir(disOptions.IndicesDirectory, disOptions.numberOfBins))
+    if (!verify_indices_dir(d_options.indices_dir,d_options.number_of_bins))
         return 1;
 
-    if (!checkReadFiles(disOptions))
+    if (!check_read_files(d_options))
         return 1;
 
     try
     {
-        configureDisMapper(disOptions);
+        configure_d_mapper(d_options);
     }
     catch (Exception const & e)
     {

@@ -19,7 +19,7 @@ for organism in 64-viral; do
     python manage_bins.py split $organism;
     mkdir gold/$organism-binned-indices/;
     ${DREAM_YARA_INDEXER} input/$organism-binned-genomes/* -o gold/$organism-binned-indices/;
-    ${IBF_INDEXER} -b 64 -t 4 -k 19 -nh 2 -bs 1 input/$organism-binned-genomes/ -o gold/$organism-binned-genomes.filter;
+    ${IBF_INDEXER} -b 64 -t 4 -k 19 -nh 2 -bs 5m input/$organism-binned-genomes/ -o gold/$organism-binned-genomes.filter;
     python manage_bins.py clear $organism;
 done
 

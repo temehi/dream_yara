@@ -69,30 +69,30 @@ using namespace seqan;
 // ----------------------------------------------------------------------------
 // Class Options
 // ----------------------------------------------------------------------------
-
 struct Options
 {
-    std::map<uint32_t, CharString>  binContigFiles;
-    CharString      contigsIndexFile;
+    std::vector<std::pair<uint32_t, std::string> >  bin_contigs;
+    CharString                                      contigsIndexFile;
+    CharString                                      cur_index_file;
 
-    uint32_t        numberOfBins;
-    uint32_t        currentBinNo;
+    uint32_t                                        number_of_bins;
+    uint32_t                                        cur_bin_number;
 
-    uint64_t        contigsSize;
-    uint64_t        contigsMaxLength;
-    uint64_t        contigsSum;
+    uint64_t                                        contigsSize;
+    uint64_t                                        contigsMaxLength;
+    uint64_t                                        contigsSum;
 
-    unsigned        threadsCount;
+    unsigned                                        threads_count;
 
-    bool            verbose;
+    bool                                            verbose;
 
     Options() :
-    numberOfBins(64),
-    currentBinNo(0),
+    number_of_bins(1),
+    cur_bin_number(0),
     contigsSize(),
     contigsMaxLength(),
     contigsSum(),
-    threadsCount(1),
+    threads_count(1),
     verbose(false)
     {}
 };
@@ -161,10 +161,7 @@ void setupArgumentParser(ArgumentParser & parser, Options const & options)
     addOption(parser, ArgParseOption("t", "threads", "Specify the number of threads to use (valid for bloom filter only).", ArgParseOption::INTEGER));
     setMinValue(parser, "threads", "1");
     setMaxValue(parser, "threads", "32");
-    setDefaultValue(parser, "threads", options.threadsCount);
-
-
-
+    setDefaultValue(parser, "threads", options.threads_count);
 }
 
 // ----------------------------------------------------------------------------
@@ -187,58 +184,60 @@ parseCommandLine(Options & options, ArgumentParser & parser, int argc, char cons
 
     // std::map<uint32_t, CharString>  binContigs;
     // Parse contig input files.
-    uint32_t updateCount = getArgumentValueCount(parser, 0);
-    for (uint32_t i = 0; i < updateCount; ++i)
+    options.number_of_bins = getArgumentValueCount(parser, 0);
+    options.bin_contigs.resize(options.number_of_bins);
+    for (uint32_t i = 0; i < options.number_of_bins; ++i)
     {
-        CharString  currentFile;
-        uint32_t    currentBinNo;
+        std::string  current_file;
+        uint32_t     cur_bin_number;
 
-        getArgumentValue(currentFile, parser, 0, i);
+        getArgumentValue(current_file, parser, 0, i);
 
-        if (getBinNoFromFile(currentBinNo, currentFile))
-            options.binContigFiles[currentBinNo] = currentFile;
+        if (get_bin_number_from_file(cur_bin_number, current_file))
+            options.bin_contigs[i] = std::make_pair(cur_bin_number, current_file);
         else
         {
-            std::cerr << "File: " << currentFile << "\ndoesn't have a valid name\n";
+            std::cerr << "File: " << current_file << "\ndoesn't have a valid name\n";
             exit(1);
         }
+
     }
 
     // Parse contigs index prefix.
     getOptionValue(options.contigsIndexFile, parser, "output-prefix");
 
     // Parse and set temp dir.
-    CharString tmpDir;
-    getOptionValue(tmpDir, parser, "tmp-dir");
+    CharString tmp_dir;
+    getOptionValue(tmp_dir, parser, "tmp-dir");
     if (!isSet(parser, "tmp-dir"))
     {
-        tmpDir = getPath(options.contigsIndexFile);
-        if (empty(tmpDir))
-            getCwd(tmpDir);
+        tmp_dir = getPath(options.contigsIndexFile);
+        if (empty(tmp_dir))
+            getCwd(tmp_dir);
     }
-    setEnv("TMPDIR", tmpDir);
+    setEnv("TMPDIR", tmp_dir);
 
-//    if (isSet(parser, "number-of-bins")) getOptionValue(options.numberOfBins, parser, "number-of-bins");
-    if (isSet(parser, "threads")) getOptionValue(options.threadsCount, parser, "threads");
+//    if (isSet(parser, "number-of-bins")) getOptionValue(options.number_of_bins, parser, "number-of-bins");
+    if (isSet(parser, "threads")) getOptionValue(options.threads_count, parser, "threads");
 
     return ArgumentParser::PARSE_OK;
 }
 
 // ----------------------------------------------------------------------------
-// Function loadContigs()
+// Function load_contigs()
 // ----------------------------------------------------------------------------
 
 template <typename TSpec, typename TConfig>
-void loadContigs(YaraIndexer<TSpec, TConfig> & me)
+void load_contigs(YaraIndexer<TSpec, TConfig> & me)
 {
     if (me.options.verbose)
     {
         mtx.lock();
-        std::cerr << "[bin " << me.options.currentBinNo << "] Loading reference ..." << std::endl;
+        std::cerr << "[bin " << me.options.cur_bin_number << "] Loading reference ..." << std::endl;
         mtx.unlock();
     }
 
-    if (!open(me.contigsDir, toCString(me.options.binContigFiles.at(me.options.currentBinNo) )))
+    if (!open(me.contigsDir, toCString(me.options.cur_index_file)))
         throw RuntimeError("Error while opening the reference file.");
 
     try
@@ -254,16 +253,16 @@ void loadContigs(YaraIndexer<TSpec, TConfig> & me)
 }
 
 // ----------------------------------------------------------------------------
-// Function saveContigs()
+// Function save_contigs()
 // ----------------------------------------------------------------------------
 
 template <typename TSpec, typename TConfig>
-void saveContigs(YaraIndexer<TSpec, TConfig> & me)
+void save_contigs(YaraIndexer<TSpec, TConfig> & me)
 {
     if (me.options.verbose)
     {
         mtx.lock();
-        std::cerr <<"[bin " << me.options.currentBinNo << "] Saving reference ..." << std::endl;
+        std::cerr <<"[bin " << me.options.cur_bin_number << "] Saving reference ..." << std::endl;
         mtx.unlock();
     }
 
@@ -272,11 +271,11 @@ void saveContigs(YaraIndexer<TSpec, TConfig> & me)
 }
 
 // ----------------------------------------------------------------------------
-// Function saveIndex()
+// Function save_index()
 // ----------------------------------------------------------------------------
 
 template <typename TContigsSize, typename TContigsLen, typename TContigsSum, typename TSpec, typename TConfig>
-void saveIndex(YaraIndexer<TSpec, TConfig> & me)
+void save_index(YaraIndexer<TSpec, TConfig> & me)
 {
     typedef YaraFMConfig<TContigsSize, TContigsLen, TContigsSum>    TIndexConfig;
     typedef FMIndex<void, TIndexConfig>                             TIndexSpec;
@@ -285,7 +284,7 @@ void saveIndex(YaraIndexer<TSpec, TConfig> & me)
     if (me.options.verbose)
     {
         mtx.lock();
-        std::cerr << "[bin " << me.options.currentBinNo << "] Building reference index ..." << std::endl;
+        std::cerr << "[bin " << me.options.cur_bin_number << "] Building reference index ..." << std::endl;
         mtx.unlock();
     }
 
@@ -325,7 +324,7 @@ void saveIndex(YaraIndexer<TSpec, TConfig> & me)
     if (me.options.verbose)
     {
         mtx.lock();
-        std::cerr << "[bin " << me.options.currentBinNo << "] Saving reference index:\t\t\t" << std::endl;
+        std::cerr << "[bin " << me.options.cur_bin_number << "] Saving reference index:\t\t\t" << std::endl;
         mtx.unlock();
     }
     if (!save(index, toCString(me.options.contigsIndexFile)))
@@ -333,29 +332,29 @@ void saveIndex(YaraIndexer<TSpec, TConfig> & me)
 }
 
 template <typename TContigsSize, typename TContigsLen, typename TSpec, typename TConfig>
-void saveIndex(YaraIndexer<TSpec, TConfig> & me)
+void save_index(YaraIndexer<TSpec, TConfig> & me)
 {
     if (me.options.contigsSum <= MaxValue<uint32_t>::VALUE)
     {
-        saveIndex<TContigsSize, TContigsLen, uint32_t>(me);
+        save_index<TContigsSize, TContigsLen, uint32_t>(me);
     }
     else
     {
-        saveIndex<TContigsSize, TContigsLen, uint64_t>(me);
+        save_index<TContigsSize, TContigsLen, uint64_t>(me);
     }
 }
 
 template <typename TContigsSize, typename TSpec, typename TConfig>
-void saveIndex(YaraIndexer<TSpec, TConfig> & me)
+void save_index(YaraIndexer<TSpec, TConfig> & me)
 {
     if (me.options.contigsMaxLength <= MaxValue<uint32_t>::VALUE)
     {
-        saveIndex<TContigsSize, uint32_t>(me);
+        save_index<TContigsSize, uint32_t>(me);
     }
     else
     {
 #ifdef DDR_YARA_LARGE_CONTIGS
-        saveIndex<TContigsSize, uint64_t>(me);
+        save_index<TContigsSize, uint64_t>(me);
 #else
         throw RuntimeError("Maximum contig length exceeded. Recompile with -DDR_YARA_LARGE_CONTIGS=ON.");
 #endif
@@ -363,20 +362,20 @@ void saveIndex(YaraIndexer<TSpec, TConfig> & me)
 }
 
 template <typename TSpec, typename TConfig>
-void saveIndex(YaraIndexer<TSpec, TConfig> & me)
+void save_index(YaraIndexer<TSpec, TConfig> & me)
 {
     if (me.options.contigsSize <= MaxValue<uint8_t>::VALUE)
     {
-        saveIndex<uint8_t>(me);
+        save_index<uint8_t>(me);
     }
     else if (me.options.contigsSize <= MaxValue<uint16_t>::VALUE)
     {
-        saveIndex<uint16_t>(me);
+        save_index<uint16_t>(me);
     }
     else
     {
 #ifdef DDR_YARA_LARGE_CONTIGS
-        saveIndex<uint32_t>(me);
+        save_index<uint32_t>(me);
 #else
         throw RuntimeError("Maximum number of contigs exceeded. Recompile with -DDR_YARA_LARGE_CONTIGS=ON.");
 #endif
@@ -389,10 +388,10 @@ void saveIndex(YaraIndexer<TSpec, TConfig> & me)
 void runYaraIndexer(Options & options)
 {
     YaraIndexer<> indexer(options);
-    loadContigs(indexer);
+    load_contigs(indexer);
     setContigsLimits(options, indexer.contigs.seqs);
-    saveContigs(indexer);
-    saveIndex(indexer);
+    save_contigs(indexer);
+    save_index(indexer);
 }
 
 // ----------------------------------------------------------------------------
@@ -410,48 +409,45 @@ int main(int argc, char const ** argv)
     if (res != ArgumentParser::PARSE_OK)
         return res == ArgumentParser::PARSE_ERROR;
 
-//    std::string comExt = commonExtension(options.contigsDir, options.numberOfBins);
-    typedef std::map<uint32_t,CharString>::iterator mapIter;
-
     try
     {
-
-        Semaphore thread_limiter(options.threadsCount);
         std::vector<std::future<void>> tasks;
+        uint32_t batch_size = options.number_of_bins/options.threads_count;
+        if(batch_size * options.threads_count < options.number_of_bins) ++batch_size;
 
         Timer<double>       timer;
-        Timer<double>       globalTimer;
+        Timer<double>       global_timer;
         start (timer);
-        start (globalTimer);
+        start (global_timer);
 
-        // add the new kmers from the new files
-        //iterate over the maps
-        for(mapIter iter = options.binContigFiles.begin(); iter != options.binContigFiles.end(); ++iter)
+        for (uint32_t task_number = 0; task_number < options.threads_count; ++task_number)
         {
-            tasks.emplace_back(std::async([=, &thread_limiter] {
-                Critical_section _(thread_limiter);
-
-                Timer<double>       binTimer;
-                start (binTimer);
-
-                Options binOptions = options;
-                appendFileName(binOptions.contigsIndexFile, options.contigsIndexFile, iter->first);
-
-                binOptions.currentBinNo = iter->first;
-
-                runYaraIndexer(binOptions);
-
-                stop(binTimer);
-
-                if (options.verbose)
+            tasks.emplace_back(std::async([=] {
+                for (uint32_t file_number = task_number*batch_size;
+                     file_number < options.number_of_bins && file_number < (task_number +1) * batch_size;
+                     ++file_number)
                 {
-                    mtx.lock();
-                    std::cerr <<"[bin " << iter->first << "] Done indexing reference\t\t\t" << binTimer << std::endl;
-                    mtx.unlock();
-                }
+                    Timer<double>       bin_timer;
+                    start (bin_timer);
 
-            }));
+                    Options bin_options = options;
+                    append_file_name(bin_options.contigsIndexFile, options.contigsIndexFile, options.bin_contigs[file_number].first);
+                    bin_options.cur_bin_number = options.bin_contigs[file_number].first;
+                    bin_options.cur_index_file = options.bin_contigs[file_number].second;
+                    runYaraIndexer(bin_options);
+
+                    stop(bin_timer);
+
+                    if (options.verbose)
+                    {
+                        mtx.lock();
+                        std::cerr <<"[bin " << options.bin_contigs[file_number].first << "] Done indexing reference\t\t\t" << bin_timer << std::endl;
+                        mtx.unlock();
+                    }
+
+                }}));
         }
+
         for (auto &&task : tasks)
         {
             task.get();
@@ -460,8 +456,8 @@ int main(int argc, char const ** argv)
         if (options.verbose)
             std::cerr <<"All bins are done indexing reference!\t" << timer << std::endl;
 
-        stop(globalTimer);
-        std::cerr <<"\nFinshed in \t\t\t" << globalTimer << std::endl;
+        stop(global_timer);
+        std::cerr <<"\nFinshed in \t\t\t" << global_timer << std::endl;
     }
     catch (Exception const & e)
     {

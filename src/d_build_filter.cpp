@@ -47,6 +47,7 @@
 // SeqAn headers
 // ----------------------------------------------------------------------------
 #include <seqan/index.h>
+#include <seqan/binning_directory.h>
 
 // ----------------------------------------------------------------------------
 // App headers
@@ -57,8 +58,6 @@
 #include "bits_matches.h"
 #include "misc_options.h"
 #include "d_misc_options.h"
-#include "d_kdx_filter.h"
-#include "d_bloom_filter.h"
 
 using namespace seqan;
 
@@ -68,29 +67,29 @@ using namespace seqan;
 
 struct Options
 {
-    CharString      contigsDir;
-    CharString      filterFile;
+    CharString      contigs_dir;
+    CharString      filter_file;
 
-    uint32_t        kmerSize;
-    uint32_t        numberOfBins;
-    uint64_t        bloomFilterSize;
-    uint32_t        numberOfHashes;
-    unsigned        threadsCount;
+    uint32_t        kmer_size;
+    uint32_t        number_of_bins;
+    uint64_t        size_of_ibf;
+    uint32_t        number_of_hashes;
+    unsigned        threads_count;
     bool            verbose;
 
-    FilterType      filterType;
+    FilterType      filter_type;
 
-    std::vector<std::string> filterTypeList;
+    std::vector<std::string> filter_type_list;
 
     Options() :
-    kmerSize(20),
-    numberOfBins(64),
-    bloomFilterSize(8589934592 + filterMetadataSize), // 1GB
-    numberOfHashes(4),
-    threadsCount(1),
+    kmer_size(20),
+    number_of_bins(64),
+    size_of_ibf(1_g), // 1000_m
+    number_of_hashes(4),
+    threads_count(1),
     verbose(false),
-    filterType(BLOOM),
-    filterTypeList({"bloom", "kmer_direct", "none"})
+    filter_type(BLOOM),
+    filter_type_list({"bloom", "kmer_direct", "none"})
     {
     }
 };
@@ -135,12 +134,12 @@ void setupArgumentParser(ArgumentParser & parser, Options const & options)
     addOption(parser, ArgParseOption("t", "threads", "Specify the number of threads to use.", ArgParseOption::INTEGER));
     setMinValue(parser, "threads", "1");
     setMaxValue(parser, "threads", "2048");
-    setDefaultValue(parser, "threads", options.threadsCount);
+    setDefaultValue(parser, "threads", options.threads_count);
 
     addOption(parser, ArgParseOption("ft", "filter-type", "type of filter to build",
                                      ArgParseOption::STRING));
-    setValidValues(parser, "filter-type", options.filterTypeList);
-    setDefaultValue(parser, "filter-type",  options.filterTypeList[options.filterType]);
+    setValidValues(parser, "filter-type", options.filter_type_list);
+    setDefaultValue(parser, "filter-type",  options.filter_type_list[options.filter_type]);
 
 
     addOption(parser, ArgParseOption("k", "kmer-size", "The size of kmers for bloom_filter",
@@ -151,12 +150,12 @@ void setupArgumentParser(ArgumentParser & parser, Options const & options)
     addOption(parser, ArgParseOption("nh", "num-hash", "Specify the number of hash functions to use for the bloom filter.", ArgParseOption::INTEGER));
     setMinValue(parser, "num-hash", "2");
     setMaxValue(parser, "num-hash", "5");
-    setDefaultValue(parser, "num-hash", options.numberOfHashes);
+    setDefaultValue(parser, "num-hash", options.number_of_hashes);
 
-    addOption(parser, ArgParseOption("bs", "bloom-size", "The size of bloom filter in GB.", ArgParseOption::INTEGER));
-    setMinValue(parser, "bloom-size", "1");
-    setMaxValue(parser, "bloom-size", "512");
-    setDefaultValue(parser, "bloom-size", 1);
+    addOption(parser, ArgParseOption("bs", "bloom-size",
+            "The size of bloom filter suffixed by either M or G for mega bytes or giga bytes respectively.",
+            ArgParseOption::STRING));
+    setDefaultValue(parser, "bloom-size", "1G");
 }
 
 // ----------------------------------------------------------------------------
@@ -175,38 +174,43 @@ parseCommandLine(Options & options, ArgumentParser & parser, int argc, char cons
     getOptionValue(options.verbose, parser, "verbose");
 
     // Parse contigs input file.
-    getArgumentValue(options.contigsDir, parser, 0);
+    getArgumentValue(options.contigs_dir, parser, 0);
 
     // Append trailing slash if it doesn't exist.
-    appendTrailingSlash(options.contigsDir);
+    append_trailing_slash(options.contigs_dir);
 
     // Parse contigs index prefix.
-    getOptionValue(options.filterFile, parser, "output-file");
+    getOptionValue(options.filter_file, parser, "output-file");
     if (!isSet(parser, "output-file"))
     {
-        options.filterFile = trimExtension(options.contigsDir);
-        append(options.filterFile, "bloom.filter");
+        options.filter_file = trimExtension(options.contigs_dir);
+        append(options.filter_file, "bloom.filter");
     }
 
-    getOptionValue(options.filterType, parser, "filter-type", options.filterTypeList);
+    getOptionValue(options.filter_type, parser, "filter-type", options.filter_type_list);
 
-    if (isSet(parser, "number-of-bins")) getOptionValue(options.numberOfBins, parser, "number-of-bins");
-    if (isSet(parser, "kmer-size")) getOptionValue(options.kmerSize, parser, "kmer-size");
-    if (isSet(parser, "threads")) getOptionValue(options.threadsCount, parser, "threads");
-    if (isSet(parser, "num-hash")) getOptionValue(options.numberOfHashes, parser, "num-hash");
+    if (isSet(parser, "number-of-bins")) getOptionValue(options.number_of_bins, parser, "number-of-bins");
+    if (isSet(parser, "kmer-size")) getOptionValue(options.kmer_size, parser, "kmer-size");
+    if (isSet(parser, "threads")) getOptionValue(options.threads_count, parser, "threads");
+    if (isSet(parser, "num-hash")) getOptionValue(options.number_of_hashes, parser, "num-hash");
 
-    uint64_t bloomSize;
-    if (getOptionValue(bloomSize, parser, "bloom-size"))
+    std::string ibf_size;
+    if (getOptionValue(ibf_size, parser, "bloom-size"))
     {
-        if ((bloomSize & (bloomSize - 1)) == 0)
+        uint64_t base = std::stoi(ibf_size);
+        switch (ibf_size.at(ibf_size.size()-1))
         {
-            options.bloomFilterSize = bloomSize * 8589934592 + filterMetadataSize; // 8589934592 = 1GB
+            case 'G': case 'g':
+                options.size_of_ibf =  base * 8*1024*1024*1024;
+                break;
+            case 'M': case 'm':
+                options.size_of_ibf =  base * 8*1024*1024;
+                break;
+            default:
+                std::cerr <<"[ERROR] invalid --bloom-size (-bs) parameter provided. (eg 256M, 1g)" << std::endl;
+                exit(1);
         }
-        else
-        {
-            std::cerr <<"[ERROR] --bloom-size (-bs) parameter should be a power of 2!" << std::endl;
-            exit(1);
-        }
+
     }
     return ArgumentParser::PARSE_OK;
 }
@@ -217,38 +221,55 @@ parseCommandLine(Options & options, ArgumentParser & parser, int argc, char cons
 template <typename TFilter>
 inline void build_filter(Options & options, TFilter & filter)
 {
-    std::string comExt = commonExtension(options.contigsDir, options.numberOfBins);
+    std::string com_ext = common_ext(options.contigs_dir, options.number_of_bins);
 
     Timer<double>       timer;
-    Timer<double>       globalTimer;
+    Timer<double>       global_timer;
     start (timer);
-    start (globalTimer);
+    start (global_timer);
 
-    uint32_t numThr = options.threadsCount;
-    uint32_t batchSize = options.numberOfBins/numThr;
-    if(batchSize * numThr < options.numberOfBins) ++batchSize;
+    uint32_t batch_size = options.number_of_bins/options.threads_count;
+    if(batch_size * options.threads_count < options.number_of_bins) ++batch_size;
 
     std::vector<std::future<void>> tasks;
 
-    for (uint32_t taskNo = 0; taskNo < numThr; ++taskNo)
+    for (uint32_t task_number = 0; task_number < options.threads_count; ++task_number)
     {
         tasks.emplace_back(std::async([=, &filter] {
-            for (uint32_t binNo = taskNo*batchSize; binNo < options.numberOfBins && binNo < (taskNo +1) * batchSize; ++binNo)
+            for (uint32_t bin_number = task_number*batch_size;
+                bin_number < options.number_of_bins && bin_number < (task_number +1) * batch_size;
+                ++bin_number)
             {
-                Timer<double>       binTimer;
-                start (binTimer);
+                Timer<double>       bin_timer;
+                start (bin_timer);
 
-                CharString fastaFile;
-                appendFileName(fastaFile, options.contigsDir, binNo);
-                append(fastaFile, comExt);
+                CharString seq_file_path;
+                append_file_name(seq_file_path, options.contigs_dir, bin_number);
+                append(seq_file_path, com_ext);
 
-                filter.addFastaFile(fastaFile, binNo);
-
-                stop(binTimer);
+                // read everything as CharString to avoid impure sequences crashing the program
+                CharString id, seq;
+                SeqFileIn seq_file_in;
+                if (!open(seq_file_in, toCString(seq_file_path)))
+                {
+                    CharString msg = "Unable to open contigs file: ";
+                    append(msg, CharString(seq_file_path));
+                    std::cerr << msg << std::endl;
+                    throw toCString(msg);
+                }
+                while(!atEnd(seq_file_in))
+                {
+                    readRecord(id, seq, seq_file_in);
+                    if(length(seq) < options.kmer_size)
+                        continue;
+                    insertKmer(filter, seq, bin_number);
+                }
+                close(seq_file_in);
+                stop(bin_timer);
                 if (options.verbose)
                 {
                     mtx.lock();
-                    std::cerr <<"[bin " << binNo << "] Done adding kmers!\t\t\t" << binTimer << std::endl;
+                    std::cerr <<"[bin " << bin_number << "] Done adding kmers!\t\t\t" << bin_timer << std::endl;
                     mtx.unlock();
                 }
             }}));
@@ -263,12 +284,12 @@ inline void build_filter(Options & options, TFilter & filter)
         std::cerr <<"All bins are done adding kmers!\t\t" << timer << std::endl;
 
     start(timer);
-    filter.save(toCString(options.filterFile));
+    store(filter, toCString(options.filter_file));
     stop(timer);
     if (options.verbose)
-        std::cerr <<"Done saving filter (" << filter.size_mb() <<" MB)\t\t" << timer << std::endl;
-    stop(globalTimer);
-    std::cerr <<"\nFinshed in \t\t\t" << globalTimer << std::endl;
+        std::cerr <<"Done saving filter (" << size(filter) <<" MB)\t\t" << timer << std::endl;
+    stop(global_timer);
+    std::cerr <<"\nFinshed in \t\t\t" << global_timer << std::endl;
 }
 
 
@@ -288,29 +309,30 @@ int main(int argc, char const ** argv)
         return res == ArgumentParser::PARSE_ERROR;
 
     // check if file already exists or can be created
-    if (!checkOutputFile(options.filterFile))
+    if (!check_output_file(options.filter_file))
         return 1;
+
 
     try
     {
-        if (options.filterType == BLOOM)
+        if (options.filter_type == BLOOM)
         {
-            SeqAnBloomFilter<> filter  (options.numberOfBins,
-                                        options.numberOfHashes,
-                                        options.kmerSize,
-                                        options.bloomFilterSize);
 
+            typedef BinningDirectory<InterleavedBloomFilter,
+                                    BDConfig<Dna, Normal, Uncompressed> > BinningDirectoriesIBF;
+            BinningDirectoriesIBF filter(options.number_of_bins,
+                                         options.number_of_hashes,
+                                         options.kmer_size,
+                                         options.size_of_ibf);
             build_filter(options, filter);
         }
-        else if (options.filterType == KMER_DIRECT)
-        {
-            uint64_t vec_size = (1u << (2 * options.kmerSize));
-            vec_size *= options.numberOfBins;
-            vec_size += filterMetadataSize;
-            SeqAnKDXFilter<> filter (options.numberOfBins, options.kmerSize, vec_size);
-
-            build_filter(options, filter);
-        }
+         else if (options.filter_type == KMER_DIRECT)
+         {
+            typedef BinningDirectory<DirectAddressing,
+                                    BDConfig<Dna, Normal, Uncompressed> > BinningDirectoriesDA;
+             BinningDirectoriesDA filter( options.number_of_bins, options.kmer_size);
+             build_filter(options, filter);
+         }
 
     }
     catch (Exception const & e)

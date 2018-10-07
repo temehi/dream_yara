@@ -226,9 +226,7 @@ add_executable(dream_yara_build_filter d_build_filter.cpp
                                        d_misc_options.h
                                        misc_types.h
                                        store_seqs.h
-                                       bits_matches.h
-                                       d_kdx_filter.h
-                                       d_bloom_filter.h)
+                                       bits_matches.h)
 
 add_executable(dream_yara_update_filter d_update_filter.cpp
                                         misc_timer.h
@@ -236,9 +234,7 @@ add_executable(dream_yara_update_filter d_update_filter.cpp
                                         d_misc_options.h
                                         misc_types.h
                                         store_seqs.h
-                                        bits_matches.h
-                                        d_kdx_filter.h
-                                        d_bloom_filter.h)
+                                        bits_matches.h)
 
 add_executable(dream_yara_mapper  d_mapper.cpp
                                   d_mapper.h
@@ -259,8 +255,6 @@ add_executable(dream_yara_mapper  d_mapper.cpp
                                   misc_timer.h
                                   misc_options.h
                                   d_misc_options.h
-                                  d_kdx_filter.h
-                                  d_bloom_filter.h
                                   misc_types.h
                                   bits_reads.h
                                   bits_hits.h

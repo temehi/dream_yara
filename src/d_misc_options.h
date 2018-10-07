@@ -37,7 +37,7 @@
 #define APP_YARA_MISC_OPTIONS_DIS_H_
 std::mutex mtx;
 
-static const uint32_t filterMetadataSize = 256;
+static const uint32_t BD_METADATA_SIZE = 256;
 static const uint8_t INT_WIDTH = 0x40;
 
 
@@ -46,127 +46,96 @@ enum FilterType
     BLOOM, KMER_DIRECT, NONE
 };
 
-using namespace seqan;
-class Semaphore
-{
-    std::mutex m;
-    std::condition_variable cv;
-    int count;
-
-public:
-    Semaphore(int n) : count{n} {}
-    void notify()
-    {
-        std::unique_lock<std::mutex> l(m);
-        ++count;
-        cv.notify_one();
-    }
-    void wait()
-    {
-        std::unique_lock<std::mutex> l(m);
-        cv.wait(l, [this]{ return count!=0; });
-        --count;
-    }
-};
-
-class Critical_section
-{
-    Semaphore &s;
-public:
-    Critical_section(Semaphore &ss) : s{ss} { s.wait(); }
-    ~Critical_section() { s.notify(); }
-};
-
 // ============================================================================
 // Functions
 // ============================================================================
 // ----------------------------------------------------------------------------
-// Function appendFileName()
+// Function append_file_name()
 // ----------------------------------------------------------------------------
-inline void appendFileName(CharString & target, CharString const & source, uint32_t const i)
+inline void append_file_name(CharString & target, CharString const & source, uint32_t const i)
 {
     target = source;
     append(target, std::to_string(i));
 }
 
-inline void appendFileName(CharString & target, uint32_t const i)
+inline void append_file_name(CharString & target, uint32_t const i)
 {
     CharString source = target;
-    appendFileName(target, source, i);
+    append_file_name(target, source, i);
 }
 
 // ----------------------------------------------------------------------------
-// Function getExtensionWithLeadingDot()
+// Function get_ext_with_leading_dot()
 // ----------------------------------------------------------------------------
 
 template <typename TString>
 inline typename Suffix<TString const>::Type
-getExtensionWithLeadingDot(TString const & string)
+get_ext_with_leading_dot(TString const & string)
 {
     return suffix(string, firstOf(string, IsDot()));
 }
 
 // ----------------------------------------------------------------------------
-// Function getFilesInDir()
+// Function get_files_in_dir()
 // ----------------------------------------------------------------------------
-inline void getFilesInDir(StringSet<CharString> & fileNames, CharString const directoryPath)
+inline void get_files_in_dir(StringSet<CharString> & file_names, CharString const directory_path)
 {
     DIR *dir;
     struct dirent *ent;
     struct stat st;
 
-    dir = opendir(toCString(directoryPath));
+    dir = opendir(toCString(directory_path));
     while ((ent = readdir(dir)) != NULL)
     {
-        CharString fileName = ent->d_name;
-        CharString fullFileName = directoryPath;
-        append(fullFileName, "/");
-        append(fullFileName, fileName);
+        CharString file_name = ent->d_name;
+        CharString full_file_name = directory_path;
+        append(full_file_name, "/");
+        append(full_file_name, file_name);
 
 
-        bool invalidFile = (fileName[0] == '.')
-        || (stat(toCString(fullFileName), &st) == -1)
+        bool invalidFile = (file_name[0] == '.')
+        || (stat(toCString(full_file_name), &st) == -1)
         || ((st.st_mode & S_IFDIR) != 0);
 
         if (!invalidFile)
-            appendValue(fileNames, fileName);
+            appendValue(file_names, file_name);
     }
 }
 
 // ----------------------------------------------------------------------------
-// Function getValidFilesInDir()
+// Function get_valid_files_in_dir()
 // ----------------------------------------------------------------------------
-inline void getValidFilesInDir(StringSet<CharString> & fileNames,
-                               CharString const directoryPath,
-                               std::vector<std::string> const & validExtensions)
+inline void get_valid_files_in_dir(StringSet<CharString> & file_names,
+                                   CharString const directory_path,
+                                   std::vector<std::string> const & valid_ext)
 {
-    StringSet<CharString>  allFileNames;
-    getFilesInDir(allFileNames, directoryPath);
-    for (uint32_t i = 0; i < length(allFileNames); ++i)
+    StringSet<CharString>  all_file_names;
+    get_files_in_dir(all_file_names, directory_path);
+    for (uint32_t i = 0; i < length(all_file_names); ++i)
     {
-        CharString ext = getExtensionWithLeadingDot(allFileNames[i]);
+        CharString ext = get_ext_with_leading_dot(all_file_names[i]);
 
-        auto it = std::find(validExtensions.begin(), validExtensions.end(), std::string(toCString(ext)));
-        if (it != validExtensions.end())
-            appendValue(fileNames, allFileNames[i]);
+        auto it = std::find(valid_ext.begin(), valid_ext.end(), std::string(toCString(ext)));
+        if (it != valid_ext.end())
+            appendValue(file_names, all_file_names[i]);
     }
 
 }
 
 // ----------------------------------------------------------------------------
-// Function verifyIndicesDir()
+// Function verify_indices_dir()
 // ----------------------------------------------------------------------------
-inline bool verifyIndicesDir(CharString const directoryPath, uint32_t const numberOfBins)
+inline bool verify_indices_dir(CharString const directory_path, uint32_t const number_of_bins)
 {
-    for (uint32_t i=0; i < numberOfBins; ++i)
+    for (uint32_t i=0; i < number_of_bins; ++i)
     {
-        CharString contigsLimitFile;
-        appendFileName(contigsLimitFile, directoryPath, i);
-        append(contigsLimitFile, ".txt.size");
+        CharString contigs_limit_file;
+        append_file_name(contigs_limit_file, directory_path, i);
+        append(contigs_limit_file, ".txt.size");
 
         String<uint64_t> limits;
 
-        if (!open(limits, toCString(contigsLimitFile), OPEN_RDONLY|OPEN_QUIET))
+        if (!open(limits, toCString(contigs_limit_file), OPEN_RDONLY|OPEN_QUIET))
         {
             std::cerr << "No index for bin " << i << '\n';
             return false;
@@ -176,24 +145,24 @@ inline bool verifyIndicesDir(CharString const directoryPath, uint32_t const numb
 }
 
 // ----------------------------------------------------------------------------
-// Function verifyFnaFile()
+// Function verify_fna_file()
 // ----------------------------------------------------------------------------
-inline bool verifyFnaFile(CharString const & fastaFile)
+inline bool verify_fna_file(CharString const & fasta_file)
 {
-    SeqFileIn seqFileIn;
-    if (!open(seqFileIn, toCString(fastaFile)))
+    SeqFileIn seq_file_in;
+    if (!open(seq_file_in, toCString(fasta_file)))
     {
-        std::cerr << "Fasta file: " << fastaFile << " can not be found!\n" ;
+        std::cerr << "Fasta file: " << fasta_file << " can not be found!\n" ;
         return false;
     }
-    close(seqFileIn);
+    close(seq_file_in);
     return true;
 }
 
 // ----------------------------------------------------------------------------
-// Function commonExtension()
+// Function common_ext()
 // ----------------------------------------------------------------------------
-inline std::string commonExtension(CharString const directoryPath, uint32_t const numberOfBins)
+inline std::string common_ext(CharString const directory_path, uint32_t const number_of_bins)
 {
     std::vector<std::string> extensions =  SeqFileIn::getFileExtensions();
 
@@ -201,21 +170,21 @@ inline std::string commonExtension(CharString const directoryPath, uint32_t cons
     for (auto ext : extensions)
     {
         count = 0;
-        for (;count < numberOfBins; ++count)
+        for (;count < number_of_bins; ++count)
         {
-            CharString fastaFile;
-            appendFileName(fastaFile, directoryPath, count);
-            append(fastaFile, ext);
-            SeqFileIn seqFileIn;
-            if (!open(seqFileIn, toCString(fastaFile)))
+            CharString fasta_file;
+            append_file_name(fasta_file, directory_path, count);
+            append(fasta_file, ext);
+            SeqFileIn seq_file_in;
+            if (!open(seq_file_in, toCString(fasta_file)))
                 break;
         }
-        if (count == numberOfBins)
+        if (count == number_of_bins)
             return ext;
     }
 
     // no common extensionfor all bins found.
-    std::cerr << "The given directory:\n\t" << directoryPath
+    std::cerr << "The given directory:\n\t" << directory_path
     << "\ndoes not contain the fasta files of all the bins!"
     << "\nAll files should have identical valid extension!\n";
     exit(1);
@@ -223,64 +192,74 @@ inline std::string commonExtension(CharString const directoryPath, uint32_t cons
 }
 
 // ----------------------------------------------------------------------------
-// Function verifyFnaDir()
+// Function verify_fna_dir()
 // ----------------------------------------------------------------------------
-inline bool verifyFnaDir(CharString const directoryPath, uint32_t const numberOfBins)
+inline bool verify_fna_dir(CharString const directory_path, uint32_t const number_of_bins)
 {
-    for (uint32_t i=0; i < numberOfBins; ++i)
+    for (uint32_t i=0; i < number_of_bins; ++i)
     {
-        CharString fastaFile;
-        appendFileName(fastaFile, directoryPath, i);
-        append(fastaFile, ".fna");
-        if(!verifyFnaFile(fastaFile))
+        CharString fasta_file;
+        append_file_name(fasta_file, directory_path, i);
+        append(fasta_file, ".fna");
+        if(!verify_fna_file(fasta_file))
             return false;
     }
     return true;
 }
 
 // ----------------------------------------------------------------------------
-// Function appendTrailingSlash()
+// Function append_trailing_slash()
 // ----------------------------------------------------------------------------
-inline void appendTrailingSlash(CharString & directoryPath)
+inline void append_trailing_slash(CharString & directory_path)
 {
-    char lastChar = directoryPath[length(directoryPath) - 1];
+    char lastChar = directory_path[length(directory_path) - 1];
     if (lastChar != '/')
-        append(directoryPath, "/");
+        append(directory_path, "/");
 }
 
 // ----------------------------------------------------------------------------
-// Function checkOutputFile()
+// Function check_output_file()
 // ----------------------------------------------------------------------------
-inline bool checkOutputFile(CharString const filePath)
+inline bool check_output_file(CharString const file_path)
 {
-    if (std::ifstream(toCString(filePath)))
+    if (std::ifstream(toCString(file_path)))
     {
-        std::cerr << "File:\n" << filePath << "\nalready exists!" << std::endl;
+        std::cerr << "File:\n" << file_path << "\nalready exists!" << std::endl;
         std::cerr << "You can either remove it or use a different file name!" << std::endl;
         return false;
     }
-    std::ofstream file(toCString(filePath));
+    std::ofstream file(toCString(file_path));
     if (!file)
     {
-        std::cerr << "File:\n" << filePath << "\ncould not be created!" << std::endl;
+        std::cerr << "File:\n" << file_path << "\ncould not be created!" << std::endl;
         return false;
     }
-    std::remove(toCString(filePath)); // delete file
+    std::remove(toCString(file_path)); // delete file
 
     return true;
 }
+// ----------------------------------------------------------------------------
+// Function get_file_name()
+// ----------------------------------------------------------------------------
+
+template <typename TString>
+inline typename Suffix<TString const>::Type
+get_file_name(TString const & string)
+{
+    return suffix(string, lastOf(string, IsPathDelimited()));
+}
 
 // ----------------------------------------------------------------------------
-// Function getBinNoFromFile()
+// Function get_bin_number_from_file()
 // ----------------------------------------------------------------------------
-bool getBinNoFromFile(uint32_t & binNo, CharString const & currentFile)
+bool get_bin_number_from_file(uint32_t & bin_number, CharString const & current_file)
 {
-    CharString fileName = getFilename(currentFile);
-    CharString fileNameNoext = trimExtension(fileName);
-    //    std::string _binNo = toCString(fileNameNoext);
+    CharString file_name = get_file_name(current_file);
+    CharString file_name_no_ext = trimExtension(file_name);
+    //    std::string _bin_number = toCString(file_name_no_ext);
 
     char* p;
-    binNo = std::strtol(toCString(fileNameNoext), &p, 10);
+    bin_number = std::strtol(toCString(file_name_no_ext), &p, 10);
     return *p == 0;
 }
 

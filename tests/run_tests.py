@@ -113,12 +113,17 @@ def main(source_base, binary_base):
     # Run DREAM-yara IBF Filter Tests compute
     # ============================================================
 
-    ibf_args = ['-b', '64' ,'-t', '4' ,'-k', '19' ,'-nh', ' 2' ,'-bs', '1']
+    ibf_args = ['-b', '64' ,'-t', '4' ,'-k', '19' ,'-nh', ' 2' ,'-bs', '5m']
     for organism in ['64-viral']:
+        # ============================================================
+        # Split the genomes in to 64 bins.
+        # ============================================================
         conf = app_tests.TestConf(
             program=path_to_ibf_filter,
             args=[ph.outFile('%s-binned-genomes/' % organism),
-                  '-o', ph.outFile('%s-binned-genomes.filter' % organism)] + ibf_args)
+                  '-o', ph.outFile('%s-binned-genomes.filter' % organism)] + ibf_args,
+            to_diff=[(ph.inFile('gold/%s-binned-genomes.filter' % organism),
+                          ph.outFile('%s-binned-genomes.filter' % organism), 'md5')])
         conf_list.append(conf)
 
 

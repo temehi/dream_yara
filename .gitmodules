@@ -1,8 +1,8 @@
 [submodule "include/seqan"]
 	path = include/seqan
-	url = https://github.com/seqan/seqan
+	url = https://github.com/eseiler/seqan
 [submodule "seqan"]
-	branch = develop
+	branch = SeqAn
 [submodule "include/sdsl-lite"]
 	path = include/sdsl-lite
 	url = https://github.com/xxsds/sdsl-lite

@@ -49,46 +49,45 @@ using namespace seqan;
 struct DisOptions : public Options
 {
 public:
-    CharString              IndicesDirectory;
-    CharString              filterFile;
-    CharString              superOutputFile;
+    CharString              indices_dir;
+    CharString              filter_file;
+    CharString              super_output_file;
 
-    double                  loadFilter      = 0.0;
-    double                  filterReads     = 0.0;
-    double                  copyReads       = 0.0;
-    double                  copyAlignments  = 0.0;
-    double                  moveCigars      = 0.0;
+    double                  load_filter      = 0.0;
+    double                  filter_reads     = 0.0;
+    double                  copy_reads       = 0.0;
+    double                  copy_alignments  = 0.0;
+    double                  move_cigars      = 0.0;
 
-    bool                    skipSamHeader = false;
+    bool                    skip_sam_header = false;
 
-    uint32_t                kmerSize = 20;
-    uint32_t                numberOfBins = 64;
+    uint32_t                kmer_size = 20;
+    uint32_t                number_of_bins = 64;
 
-    uint32_t                currentBinNo = 0;
-    uint64_t                filteredReads = 0;
-    std::vector<uint32_t>   contigOffsets;
+    uint32_t                cur_bin_number = 0;
+    uint64_t                filtered_reads = 0;
+    std::vector<uint32_t>   contig_offsets;
 
-    std::vector<std::vector<uint32_t>>          origReadIdMap;
-    std::map<uint32_t, String<CigarElement<>>>  collectedCigars;
+    std::vector<std::vector<uint32_t>>          orig_read_id_map;
+    std::map<uint32_t, String<CigarElement<>>>  collected_cigars;
 
-    FilterType      filterType = BLOOM;
+    FilterType               filter_type = BLOOM;
+    std::vector<std::string> filter_typeList = {"bloom", "kmer_direct", "none"};
 
-    std::vector<std::string> filterTypeList = {"bloom", "kmer_direct", "none"};
-
-    uint32_t getContigOffsets()
+    uint32_t get_contig_offsets()
     {
-        return contigOffsets[currentBinNo];
+        return contig_offsets[cur_bin_number];
     }
 
-    uint16_t getThreshold(uint16_t readLen)
+    uint16_t get_threshold(uint16_t read_len)
     {
-        uint16_t maxError = errorRate * readLen;
+        uint16_t max_error = errorRate * read_len;
 
-        // same as readLen - kmerSize + 1 - (maxError * kmerSize);
-        if (kmerSize * (1 + maxError) > readLen)
+        // same as read_len - kmer_size + 1 - (max_error * kmer_size);
+        if (kmer_size * (1 + max_error) > read_len)
             return 0;
 
-        return readLen - kmerSize * (1 + maxError) + 1;
+        return read_len - kmer_size * (1 + max_error) + 1;
     }
 
 };
@@ -98,167 +97,167 @@ public:
 // ==========================================================================
 
 // ----------------------------------------------------------------------------
-// Function appendStats()
+// Function append_stats()
 // ----------------------------------------------------------------------------
 template <typename TSpec, typename TConfig, typename TMainConfig>
-inline void appendStats(Mapper<TSpec, TMainConfig> & mainMapper, Mapper<TSpec, TConfig> & childMapper)
+inline void append_stats(Mapper<TSpec, TMainConfig> & d_mapper, Mapper<TSpec, TConfig> & child_mapper)
 {
-    mainMapper.stats.loadContigs    += childMapper.stats.loadContigs;
-    mainMapper.stats.loadReads      += childMapper.stats.loadReads;
-    mainMapper.stats.collectSeeds   += childMapper.stats.collectSeeds;
-    mainMapper.stats.findSeeds      += childMapper.stats.findSeeds;
-    mainMapper.stats.classifyReads  += childMapper.stats.classifyReads;
-    mainMapper.stats.rankSeeds      += childMapper.stats.rankSeeds;
-    mainMapper.stats.extendHits     += childMapper.stats.extendHits;
-    mainMapper.stats.sortMatches    += childMapper.stats.sortMatches;
-    mainMapper.stats.compactMatches += childMapper.stats.compactMatches;
-    mainMapper.stats.selectPairs    += childMapper.stats.selectPairs;
-    mainMapper.stats.verifyMatches  += childMapper.stats.verifyMatches;
-    mainMapper.stats.alignMatches   += childMapper.stats.alignMatches;
-    mainMapper.stats.writeMatches   += childMapper.stats.writeMatches;
-    mainMapper.stats.rescuedReads   += childMapper.stats.rescuedReads;
+    d_mapper.stats.loadContigs    += child_mapper.stats.loadContigs;
+    d_mapper.stats.loadReads      += child_mapper.stats.loadReads;
+    d_mapper.stats.collectSeeds   += child_mapper.stats.collectSeeds;
+    d_mapper.stats.findSeeds      += child_mapper.stats.findSeeds;
+    d_mapper.stats.classifyReads  += child_mapper.stats.classifyReads;
+    d_mapper.stats.rankSeeds      += child_mapper.stats.rankSeeds;
+    d_mapper.stats.extendHits     += child_mapper.stats.extendHits;
+    d_mapper.stats.sortMatches    += child_mapper.stats.sortMatches;
+    d_mapper.stats.compactMatches += child_mapper.stats.compactMatches;
+    d_mapper.stats.selectPairs    += child_mapper.stats.selectPairs;
+    d_mapper.stats.verifyMatches  += child_mapper.stats.verifyMatches;
+    d_mapper.stats.alignMatches   += child_mapper.stats.alignMatches;
+    d_mapper.stats.writeMatches   += child_mapper.stats.writeMatches;
+    d_mapper.stats.rescuedReads   += child_mapper.stats.rescuedReads;
 }
 
 
 // ----------------------------------------------------------------------------
-// Function copyMatches()
+// Function copy_matches()
 // ----------------------------------------------------------------------------
 template <typename TSpec, typename TConfig, typename TMainConfig>
-inline void copyMatches(Mapper<TSpec, TMainConfig> & mainMapper, Mapper<TSpec, TConfig> & childMapper, DisOptions & disOptions)
+inline void copy_matches(Mapper<TSpec, TMainConfig> & d_mapper, Mapper<TSpec, TConfig> & child_mapper, DisOptions & d_options)
 {
-    start(mainMapper.timer);
+    start(d_mapper.timer);
     typedef typename MapperTraits<TSpec, TMainConfig>::TMatch             TMatch;
     typedef typename MapperTraits<TSpec, TMainConfig>::TThreading         TThreading;
     typedef typename MapperTraits<TSpec, TMainConfig>::TMatchesAppender   TMatchesAppender;
 
-    TMatchesAppender appender(mainMapper.matchesByCoord);
+    TMatchesAppender appender(d_mapper.matchesByCoord);
 
-    uint32_t matchCount = length(childMapper.matchesByCoord);
-    for (uint32_t i = 0; i < matchCount; ++i)
+    uint32_t match_count = length(child_mapper.matchesByCoord);
+    for (uint32_t i = 0; i < match_count; ++i)
     {
         TMatch currentMatch;
-        uint32_t readId         = childMapper.matchesByCoord[i].readId;
-        uint32_t origReadId     = readId;
-        if(disOptions.filterType != NONE)
-            origReadId = disOptions.origReadIdMap[disOptions.currentBinNo][readId];
+        uint32_t read_id         = child_mapper.matchesByCoord[i].readId;
+        uint32_t orig_read_id     = read_id;
+        if(d_options.filter_type != NONE)
+            orig_read_id = d_options.orig_read_id_map[d_options.cur_bin_number][read_id];
 
-        currentMatch.readId        = origReadId;
-        currentMatch.contigId      = childMapper.matchesByCoord[i].contigId + disOptions.getContigOffsets();
-        currentMatch.isRev         = childMapper.matchesByCoord[i].isRev;
-        currentMatch.contigBegin   = childMapper.matchesByCoord[i].contigBegin;
-        currentMatch.contigEnd     = childMapper.matchesByCoord[i].contigEnd;
-        currentMatch.errors        = childMapper.matchesByCoord[i].errors;
+        currentMatch.readId        = orig_read_id;
+        currentMatch.contigId      = child_mapper.matchesByCoord[i].contigId + d_options.get_contig_offsets();
+        currentMatch.isRev         = child_mapper.matchesByCoord[i].isRev;
+        currentMatch.contigBegin   = child_mapper.matchesByCoord[i].contigBegin;
+        currentMatch.contigEnd     = child_mapper.matchesByCoord[i].contigEnd;
+        currentMatch.errors        = child_mapper.matchesByCoord[i].errors;
         appendValue(appender, currentMatch, Generous(), TThreading());
     }
-    stop(mainMapper.timer);
-    disOptions.copyAlignments += getValue(mainMapper.timer);
+    stop(d_mapper.timer);
+    d_options.copy_alignments += getValue(d_mapper.timer);
 }
 
 // ----------------------------------------------------------------------------
 // Function display Cigars()
 // ----------------------------------------------------------------------------
-inline CharString cigars2String(String<CigarElement<> > const & cigStr)
+inline CharString cigars2String(String<CigarElement<> > const & cigar_str)
 {
     CharString cs;
-    for (CigarElement<> const & cigElement : cigStr)
+    for (CigarElement<> const & cigar_element : cigar_str)
     {
-        appendNumber(cs, cigElement.count);
-        appendValue(cs, cigElement.operation);
+        appendNumber(cs, cigar_element.count);
+        appendValue(cs, cigar_element.operation);
     }
     return cs;
 }
 
-inline StringSet<CharString> cigarsSet2String(StringSet<String<CigarElement<> >, Segment< String<CigarElement<> >> > & cigStrSet)
+inline StringSet<CharString> cigarsSet2String(StringSet<String<CigarElement<> >, Segment< String<CigarElement<> >> > & cigar_str_set)
 {
     StringSet<CharString> css;
-    for (String<CigarElement<>> const & cigStr : cigStrSet)
+    for (String<CigarElement<>> const & cigar_str : cigar_str_set)
     {
-        appendValue(css, cigars2String(cigStr));
+        appendValue(css, cigars2String(cigar_str));
     }
     return css;
 }
 
 
 // ----------------------------------------------------------------------------
-// Function copyCigars()
+// Function copy_cigars()
 // ----------------------------------------------------------------------------
 template <typename TSpec, typename TConfig, typename TMainConfig>
-inline void copyCigars(Mapper<TSpec, TMainConfig> & mainMapper, Mapper<TSpec, TConfig> & childMapper, DisOptions & disOptions)
+inline void copy_cigars(Mapper<TSpec, TMainConfig> & d_mapper, Mapper<TSpec, TConfig> & child_mapper, DisOptions & d_options)
 {
-    start(mainMapper.timer);
+    start(d_mapper.timer);
     typedef typename MapperTraits<TSpec, TConfig>::TMatch             TMatch;
-    uint32_t matchCount = length(childMapper.primaryMatches);
-    for (uint32_t i = 0; i < matchCount; ++i)
+    uint32_t match_count = length(child_mapper.primaryMatches);
+    for (uint32_t i = 0; i < match_count; ++i)
     {
-        TMatch currentMatch = childMapper.primaryMatches[i];
-        uint32_t readId         = currentMatch.readId;
-        uint32_t origReadId     = readId;
-        if(disOptions.filterType != NONE)
-            origReadId = disOptions.origReadIdMap[disOptions.currentBinNo][readId];
+        TMatch currentMatch = child_mapper.primaryMatches[i];
+        uint32_t read_id         = currentMatch.readId;
+        uint32_t orig_read_id     = read_id;
+        if(d_options.filter_type != NONE)
+            orig_read_id = d_options.orig_read_id_map[d_options.cur_bin_number][read_id];
 
-        setMapped(mainMapper.ctx, origReadId);
-        setMinErrors(mainMapper.ctx, origReadId, currentMatch.errors);
+        setMapped(d_mapper.ctx, orig_read_id);
+        setMinErrors(d_mapper.ctx, orig_read_id, currentMatch.errors);
 
-        if (!isPaired(mainMapper.ctx, origReadId) && isPaired(childMapper.ctx, readId)) // First paired match
+        if (!isPaired(d_mapper.ctx, orig_read_id) && isPaired(child_mapper.ctx, read_id)) // First paired match
         {
-            setPaired(mainMapper.ctx, origReadId);
-            mainMapper.primaryMatchesProbs[origReadId] = childMapper.primaryMatchesProbs[readId];
+            setPaired(d_mapper.ctx, orig_read_id);
+            d_mapper.primaryMatchesProbs[orig_read_id] = child_mapper.primaryMatchesProbs[read_id];
         }
 
-        if(getMinErrors(mainMapper.ctx, origReadId) == currentMatch.errors)
+        if(getMinErrors(d_mapper.ctx, orig_read_id) == currentMatch.errors)
         {
-            disOptions.collectedCigars[origReadId] = childMapper.cigars[readId];
+            d_options.collected_cigars[orig_read_id] = child_mapper.cigars[read_id];
         }
     }
-    stop(mainMapper.timer);
-    disOptions.moveCigars += getValue(mainMapper.timer);
+    stop(d_mapper.timer);
+    d_options.move_cigars += getValue(d_mapper.timer);
 }
 
 // ----------------------------------------------------------------------------
-// Function transferCigars()
+// Function transfer_cigars()
 // ----------------------------------------------------------------------------
 template <typename TSpec, typename TMainConfig>
-inline void transferCigars(Mapper<TSpec, TMainConfig> & mainMapper, DisOptions & disOptions)
+inline void transfer_cigars(Mapper<TSpec, TMainConfig> & d_mapper, DisOptions & d_options)
 {
-    start(mainMapper.timer);
+    start(d_mapper.timer);
 
     typedef MapperTraits<TSpec, TMainConfig>         TTraits;
     typedef typename TTraits::TCigarsPos             TCigarsPos;
     typedef typename TTraits::TThreading             TThreading;
 
-    resize(mainMapper.cigars.limits, getReadsCount(mainMapper.reads.seqs)+1, 0);
-    for(auto iter = disOptions.collectedCigars.begin(); iter != disOptions.collectedCigars.end(); ++iter)
+    resize(d_mapper.cigars.limits, getReadsCount(d_mapper.reads.seqs)+1, 0);
+    for(auto iter = d_options.collected_cigars.begin(); iter != d_options.collected_cigars.end(); ++iter)
     {
-        mainMapper.cigars.limits[iter->first + 1] = length(iter->second);
-        append(mainMapper.cigarString, iter->second);
+        d_mapper.cigars.limits[iter->first + 1] = length(iter->second);
+        append(d_mapper.cigarString, iter->second);
     }
-    partialSum(mainMapper.cigars.limits, TThreading());
-    assign(mainMapper.cigars.positions, prefix(mainMapper.cigars.limits, length(mainMapper.cigars.limits) - 1));
+    partialSum(d_mapper.cigars.limits, TThreading());
+    assign(d_mapper.cigars.positions, prefix(d_mapper.cigars.limits, length(d_mapper.cigars.limits) - 1));
 
     // If only the primary matches were aligned, we use the identity modifier
-    setHost(mainMapper.primaryCigars, mainMapper.cigars);
-    setCargo(mainMapper.primaryCigars, mainMapper.primaryCigarPositions);
-    assign(mainMapper.primaryCigarPositions, seqan::Range<TCigarsPos>(0, length(mainMapper.primaryMatches)), Exact());
+    setHost(d_mapper.primaryCigars, d_mapper.cigars);
+    setCargo(d_mapper.primaryCigars, d_mapper.primaryCigarPositions);
+    assign(d_mapper.primaryCigarPositions, seqan::Range<TCigarsPos>(0, length(d_mapper.primaryMatches)), Exact());
 
-    stop(mainMapper.timer);
-    disOptions.moveCigars += getValue(mainMapper.timer);
+    stop(d_mapper.timer);
+    d_options.move_cigars += getValue(d_mapper.timer);
 }
 
 
 // ----------------------------------------------------------------------------
-// Function _mapReadsImpl()
+// Function _map_reads_impl()
 // ----------------------------------------------------------------------------
 template <typename TSpec, typename TConfig, typename TMainConfig, typename TReadSeqs>
-inline void _mapReadsImpl(Mapper<TSpec, TConfig> & me, Mapper<TSpec, TMainConfig>  & mainMapper, TReadSeqs & readSeqs, DisOptions & disOptions)
+inline void _map_reads_impl(Mapper<TSpec, TConfig> & me, Mapper<TSpec, TMainConfig>  & d_mapper, TReadSeqs & read_seqs, DisOptions & d_options)
 {
-    initReadsContext(me, readSeqs);
-    initSeeds(me, readSeqs);
+    initReadsContext(me, read_seqs);
+    initSeeds(me, read_seqs);
 
-    collectSeeds<0>(me, readSeqs);
+    collectSeeds<0>(me, read_seqs);
     findSeeds<0>(me, 0);
     classifyReads(me);
-    collectSeeds<1>(me, readSeqs);
-    collectSeeds<2>(me, readSeqs);
+    collectSeeds<1>(me, read_seqs);
+    collectSeeds<2>(me, read_seqs);
     findSeeds<0>(me, 1);
     findSeeds<0>(me, 2);
     rankSeeds(me);
@@ -269,10 +268,10 @@ inline void _mapReadsImpl(Mapper<TSpec, TConfig> & me, Mapper<TSpec, TMainConfig
     clearSeeds(me);
     clearHits(me);
 
-    initSeeds(me, readSeqs);
-    collectSeeds<1>(me, readSeqs);
+    initSeeds(me, read_seqs);
+    collectSeeds<1>(me, read_seqs);
     findSeeds<1>(me, 1);
-    collectSeeds<2>(me, readSeqs);
+    collectSeeds<2>(me, read_seqs);
     findSeeds<1>(me, 2);
     rankSeeds(me);
     // TODO(esiragusa): filter out hits with distance < 1.
@@ -283,8 +282,8 @@ inline void _mapReadsImpl(Mapper<TSpec, TConfig> & me, Mapper<TSpec, TMainConfig
 
     if (me.options.sensitivity > LOW)
     {
-        initSeeds(me, readSeqs);
-        collectSeeds<2>(me, readSeqs);
+        initSeeds(me, read_seqs);
+        collectSeeds<2>(me, read_seqs);
         findSeeds<2>(me, 2);
         rankSeeds(me);
         // TODO(esiragusa): filter out hits with distance < 2.
@@ -292,30 +291,30 @@ inline void _mapReadsImpl(Mapper<TSpec, TConfig> & me, Mapper<TSpec, TMainConfig
         clearHits(me);
         clearSeeds(me);
     }
-    aggregateMatches(me, readSeqs);
+    aggregateMatches(me, read_seqs);
     rankMatches(me, me.reads.seqs);
     if (me.options.verifyMatches)
         verifyMatches(me);
     alignMatches(me);
-    copyMatches(mainMapper, me, disOptions);
-    copyCigars(mainMapper, me, disOptions);
-    appendStats(mainMapper, me);
+    copy_matches(d_mapper, me, d_options);
+    copy_cigars(d_mapper, me, d_options);
+    append_stats(d_mapper, me);
 }
 
 // ----------------------------------------------------------------------------
-// Function clasifyLoadedReads()
+// Function clasify_loaded_reads()
 // ----------------------------------------------------------------------------
 template <typename TSpec, typename TMainConfig, typename TFilter>
-inline void clasifyLoadedReads(Mapper<TSpec, TMainConfig>  & mainMapper, TFilter const & filter, DisOptions & disOptions)
+inline void clasify_loaded_reads(Mapper<TSpec, TMainConfig>  & d_mapper, TFilter const & filter, DisOptions & d_options)
 {
-    start(mainMapper.timer);
+    start(d_mapper.timer);
 
-    uint32_t numReads = getReadsCount( mainMapper.reads.seqs);
-    uint16_t avgReadLen = lengthSum(mainMapper.reads.seqs) / (numReads * 2);
-    uint16_t threshold = disOptions.getThreshold(avgReadLen);
+    uint32_t number_of_reads = getReadsCount( d_mapper.reads.seqs);
+    uint16_t avgReadLen = lengthSum(d_mapper.reads.seqs) / (number_of_reads * 2);
+    uint16_t threshold = d_options.get_threshold(avgReadLen);
 
-    disOptions.origReadIdMap.clear();
-    disOptions.origReadIdMap.resize(disOptions.numberOfBins);
+    d_options.orig_read_id_map.clear();
+    d_options.orig_read_id_map.resize(d_options.number_of_bins);
 
     if (threshold == 0)
     {
@@ -323,46 +322,46 @@ inline void clasifyLoadedReads(Mapper<TSpec, TMainConfig>  & mainMapper, TFilter
         std::cerr <<"All reads will pass filteration and be mapped everywhere.\n ";
         std::cerr <<"This will be extremly slow.\n ";
         std::cerr <<"Choose an approprate error rate based on kmer size and read length\n";
-        for (uint32_t readID = 0; readID < numReads; ++readID)
+        for (uint32_t readID = 0; readID < number_of_reads; ++readID)
         {
-            for (uint32_t binNo = 0; binNo < disOptions.numberOfBins; ++binNo)
+            for (uint32_t binNo = 0; binNo < d_options.number_of_bins; ++binNo)
             {
-               disOptions.origReadIdMap[binNo].push_back(readID);
+               d_options.orig_read_id_map[binNo].push_back(readID);
             }
         }
     }
     // if paired classify only one pair
     if (IsSameType<typename TMainConfig::TSequencing, PairedEnd>::VALUE)
-        numReads = getPairsCount( mainMapper.reads.seqs);
+        number_of_reads = getPairsCount( d_mapper.reads.seqs);
 
-    uint32_t numThr = disOptions.threadsCount;
-    uint32_t batchSize = numReads/numThr;
-    if(batchSize * numThr < numReads) ++batchSize;
+    uint32_t numThr = d_options.threadsCount;
+    uint32_t batchSize = number_of_reads/numThr;
+    if(batchSize * numThr < number_of_reads) ++batchSize;
 
     std::vector<std::future<void>> tasks;
 
 
     for (uint32_t taskNo = 0; taskNo < numThr; ++taskNo)
     {
-        tasks.emplace_back(std::async([=, &mainMapper, &disOptions, &filter] {
-            for (uint32_t readID = taskNo*batchSize; readID < numReads && readID < (taskNo +1) * batchSize; ++readID)
+        tasks.emplace_back(std::async([=, &d_mapper, &d_options, &filter] {
+            for (uint32_t readID = taskNo*batchSize; readID < number_of_reads && readID < (taskNo +1) * batchSize; ++readID)
             {
-                std::vector<bool> selectedBins(disOptions.numberOfBins, false);
-                filter.whichBins(selectedBins, mainMapper.reads.seqs[readID], threshold);
-                filter.whichBins(selectedBins, mainMapper.reads.seqs[readID + numReads], threshold);
+                std::vector<bool> selectedBins(d_options.number_of_bins, false);
+                select(filter, selectedBins, d_mapper.reads.seqs[readID], threshold);
+                select(filter, selectedBins, d_mapper.reads.seqs[readID + number_of_reads], threshold);
 
                 if (IsSameType<typename TMainConfig::TSequencing, PairedEnd>::VALUE)
                 {
-                    filter.whichBins(selectedBins, mainMapper.reads.seqs[readID + 2*numReads], threshold);
-                    filter.whichBins(selectedBins, mainMapper.reads.seqs[readID + 3*numReads], threshold);
+                    select(filter, selectedBins, d_mapper.reads.seqs[readID + 2*number_of_reads], threshold);
+                    select(filter, selectedBins, d_mapper.reads.seqs[readID + 3*number_of_reads], threshold);
                 }
 
-                for (uint32_t binNo = 0; binNo < disOptions.numberOfBins; ++binNo)
+                for (uint32_t binNo = 0; binNo < d_options.number_of_bins; ++binNo)
                 {
                     if(selectedBins[binNo])
                     {
                         mtx.lock();
-                        disOptions.origReadIdMap[binNo].push_back(readID);
+                        d_options.orig_read_id_map[binNo].push_back(readID);
                         mtx.unlock();
                     }
                 }
@@ -374,91 +373,91 @@ inline void clasifyLoadedReads(Mapper<TSpec, TMainConfig>  & mainMapper, TFilter
         task.get();
     }
 
-    stop(mainMapper.timer);
-    disOptions.filterReads += getValue(mainMapper.timer);
+    stop(d_mapper.timer);
+    d_options.filter_reads += getValue(d_mapper.timer);
 
-    if (disOptions.verbose > 1)
+    if (d_options.verbose > 1)
     {
-        for (uint32_t binNo = 0; binNo < disOptions.numberOfBins; ++binNo)
+        for (uint32_t binNo = 0; binNo < d_options.number_of_bins; ++binNo)
         {
-            std::cerr << "bin " << binNo << "\t" << disOptions.origReadIdMap[binNo].size() << std::endl;
+            std::cerr << "bin " << binNo << "\t" << d_options.orig_read_id_map[binNo].size() << std::endl;
         }
     }
 }
 
 
 // ----------------------------------------------------------------------------
-// Function loadFilteredReads()
+// Function load_filtered_reads()
 // ----------------------------------------------------------------------------
 template <typename TSpec, typename TConfig, typename TMainConfig>
-inline void loadFilteredReads(Mapper<TSpec, TConfig> & me, Mapper<TSpec, TMainConfig>  & mainMapper, DisOptions & disOptions)
+inline void load_filtered_reads(Mapper<TSpec, TConfig> & me, Mapper<TSpec, TMainConfig>  & d_mapper, DisOptions & d_options)
 {
 
-    start(mainMapper.timer);
+    start(d_mapper.timer);
 
-    if(disOptions.filterType == NONE)
+    if(d_options.filter_type == NONE)
     {
-        for (uint32_t i = 0; i< getReadSeqsCount(mainMapper.reads.seqs); ++i)
+        for (uint32_t i = 0; i< getReadSeqsCount(d_mapper.reads.seqs); ++i)
         {
-            appendValue(me.reads.seqs, mainMapper.reads.seqs[i]);
+            appendValue(me.reads.seqs, d_mapper.reads.seqs[i]);
         }
     }
     else
     {
-        uint32_t numReads = getReadsCount( mainMapper.reads.seqs);
-        uint32_t numFilteredReads = disOptions.origReadIdMap[disOptions.currentBinNo].size();
+        uint32_t number_of_reads = getReadsCount( d_mapper.reads.seqs);
+        uint32_t number_of_iltered_reads = d_options.orig_read_id_map[d_options.cur_bin_number].size();
 
         //load forward reads
-        for (uint32_t i = 0; i< numFilteredReads; ++i)
+        for (uint32_t i = 0; i< number_of_iltered_reads; ++i)
         {
-            uint32_t orgId = disOptions.origReadIdMap[disOptions.currentBinNo][i];
-            appendValue(me.reads.seqs, mainMapper.reads.seqs[orgId]);
+            uint32_t orgId = d_options.orig_read_id_map[d_options.cur_bin_number][i];
+            appendValue(me.reads.seqs, d_mapper.reads.seqs[orgId]);
         }
 
         // if paired classify only one pair
         if (IsSameType<typename TMainConfig::TSequencing, PairedEnd>::VALUE)
         {
-            uint32_t numPairs = getPairsCount( mainMapper.reads.seqs);
+            uint32_t numPairs = getPairsCount( d_mapper.reads.seqs);
             //load mates
-            for (uint32_t i = 0; i< numFilteredReads; ++i)
+            for (uint32_t i = 0; i< number_of_iltered_reads; ++i)
             {
-                uint32_t orgId = disOptions.origReadIdMap[disOptions.currentBinNo][i];
-                appendValue(me.reads.seqs, mainMapper.reads.seqs[orgId + numPairs]);
-                disOptions.origReadIdMap[disOptions.currentBinNo].push_back(orgId + numPairs);
+                uint32_t orgId = d_options.orig_read_id_map[d_options.cur_bin_number][i];
+                appendValue(me.reads.seqs, d_mapper.reads.seqs[orgId + numPairs]);
+                d_options.orig_read_id_map[d_options.cur_bin_number].push_back(orgId + numPairs);
             }
-            numFilteredReads *= 2; //now we have twice the reads
+            number_of_iltered_reads *= 2; //now we have twice the reads
         }
 
         //load reverse reads
-        for (uint32_t i = 0; i< numFilteredReads; ++i)
+        for (uint32_t i = 0; i< number_of_iltered_reads; ++i)
         {
-            uint32_t orgId = disOptions.origReadIdMap[disOptions.currentBinNo][i];
-            appendValue(me.reads.seqs, mainMapper.reads.seqs[orgId + numReads]);
-            disOptions.origReadIdMap[disOptions.currentBinNo].push_back(orgId + numReads);
+            uint32_t orgId = d_options.orig_read_id_map[d_options.cur_bin_number][i];
+            appendValue(me.reads.seqs, d_mapper.reads.seqs[orgId + number_of_reads]);
+            d_options.orig_read_id_map[d_options.cur_bin_number].push_back(orgId + number_of_reads);
         }
     }
-    stop(mainMapper.timer);
-    disOptions.copyReads += getValue(mainMapper.timer);
-    disOptions.filteredReads += getReadsCount(me.reads.seqs);
+    stop(d_mapper.timer);
+    d_options.copy_reads += getValue(d_mapper.timer);
+    d_options.filtered_reads += getReadsCount(me.reads.seqs);
 }
 
 // ----------------------------------------------------------------------------
-// Function mapReads()
+// Function map_reads()
 // ----------------------------------------------------------------------------
 template <typename TSpec, typename TConfig, typename TMainConfig>
-inline void mapReads(Mapper<TSpec, TConfig> & me, Mapper<TSpec, TMainConfig>  & mainMapper, DisOptions & disOptions)
+inline void map_reads(Mapper<TSpec, TConfig> & me, Mapper<TSpec, TMainConfig>  & d_mapper, DisOptions & d_options)
 {
-    _mapReadsImpl(me, mainMapper, me.reads.seqs, disOptions);
+    _map_reads_impl(me, d_mapper, me.reads.seqs, d_options);
 }
 
 template <typename TSpec, typename TConfig, typename TMainConfig>
-inline void runMapper(Mapper<TSpec, TConfig> & me, Mapper<TSpec, TMainConfig> & mainMapper, DisOptions & disOptions)
+inline void run_d_mapper(Mapper<TSpec, TConfig> & me, Mapper<TSpec, TMainConfig> & d_mapper, DisOptions & d_options)
 {
-    loadFilteredReads(me, mainMapper, disOptions);
+    load_filtered_reads(me, d_mapper, d_options);
     if (empty(me.reads.seqs)) return;
     loadContigs(me);
     loadContigsIndex(me);
-    mapReads(me, mainMapper, disOptions);
+    map_reads(me, d_mapper, d_options);
 }
 
 
@@ -474,8 +473,8 @@ template <typename TContigsSize,
           typename TSequencing,
           typename TSeedsDistance>
 void spawnMapper(Options const & options,
-                 Mapper<TSpec, TMainConfig> & mainMapper,
-                 DisOptions & disOptions,
+                 Mapper<TSpec, TMainConfig> & d_mapper,
+                 DisOptions & d_options,
                  TThreading const & /*threading*/,
                  TSequencing const & /*sequencing*/,
                  TSeedsDistance const & /*distance*/)
@@ -483,7 +482,7 @@ void spawnMapper(Options const & options,
 
     typedef ReadMapperConfig<TThreading, TSequencing, TSeedsDistance, TContigsSize, TContigsLen, TContigsSum>  TConfig;
     Mapper<void, TConfig> mapper(options);
-    runMapper(mapper, mainMapper, disOptions);
+    run_d_mapper(mapper, d_mapper, d_options);
 }
 // ----------------------------------------------------------------------------
 // Function configureMapper()
@@ -496,19 +495,19 @@ template <typename TContigsSize,
           typename TSequencing,
           typename TSeedsDistance>
 void configureMapper(Options const & options,
-                     Mapper<TSpec, TMainConfig> & mainMapper,
-                     DisOptions & disOptions,
+                     Mapper<TSpec, TMainConfig> & d_mapper,
+                     DisOptions & d_options,
                      TThreading const & threading,
                      TSequencing const & sequencing,
                      TSeedsDistance const & distance)
 {
     if (options.contigsSum <= MaxValue<uint32_t>::VALUE)
     {
-        spawnMapper<TContigsSize, TContigsLen, uint32_t>(options, mainMapper, disOptions, threading, sequencing, distance);
+        spawnMapper<TContigsSize, TContigsLen, uint32_t>(options, d_mapper, d_options, threading, sequencing, distance);
     }
     else
     {
-        spawnMapper<TContigsSize, TContigsLen, uint64_t>(options, mainMapper, disOptions, threading, sequencing, distance);
+        spawnMapper<TContigsSize, TContigsLen, uint64_t>(options, d_mapper, d_options, threading, sequencing, distance);
     }
 }
 
@@ -519,20 +518,20 @@ template <typename TContigsSize,
           typename TSequencing,
           typename TSeedsDistance>
 void configureMapper(Options const & options,
-                     Mapper<TSpec, TMainConfig> & mainMapper,
-                     DisOptions & disOptions,
+                     Mapper<TSpec, TMainConfig> & d_mapper,
+                     DisOptions & d_options,
                      TThreading const & threading,
                      TSequencing const & sequencing,
                      TSeedsDistance const & distance)
 {
     if (options.contigsMaxLength <= MaxValue<uint32_t>::VALUE)
     {
-        configureMapper<TContigsSize, uint32_t>(options, mainMapper, disOptions, threading, sequencing, distance);
+        configureMapper<TContigsSize, uint32_t>(options, d_mapper, d_options, threading, sequencing, distance);
     }
     else
     {
 #ifdef DR_YARA_LARGE_CONTIGS
-        configureMapper<TContigsSize, uint64_t>(options, mainMapper, disOptions, threading, sequencing, distance);
+        configureMapper<TContigsSize, uint64_t>(options, d_mapper, d_options, threading, sequencing, distance);
 #else
         throw RuntimeError("Maximum contig length exceeded. Recompile with -DDR_YARA_LARGE_CONTIGS=ON.");
 #endif
@@ -541,8 +540,8 @@ void configureMapper(Options const & options,
 
 template <typename TSpec, typename TMainConfig>
 void configureMapper(Options const & options,
-                     Mapper<TSpec, TMainConfig> & mainMapper,
-                     DisOptions & disOptions)
+                     Mapper<TSpec, TMainConfig> & d_mapper,
+                     DisOptions & d_options)
 {
     typedef typename MapperTraits<TSpec, TMainConfig>::TThreading       TThreading;
     typedef typename MapperTraits<TSpec, TMainConfig>::TSequencing      TSequencing;
@@ -550,16 +549,16 @@ void configureMapper(Options const & options,
 
     if (options.contigsSize <= MaxValue<uint8_t>::VALUE)
     {
-        configureMapper<uint8_t>(options, mainMapper, disOptions, TThreading(), TSequencing(), TSeedsDistance());
+        configureMapper<uint8_t>(options, d_mapper, d_options, TThreading(), TSequencing(), TSeedsDistance());
     }
     else if (options.contigsSize <= MaxValue<uint16_t>::VALUE)
     {
-        configureMapper<uint16_t>(options, mainMapper, disOptions, TThreading(), TSequencing(), TSeedsDistance());
+        configureMapper<uint16_t>(options, d_mapper, d_options, TThreading(), TSequencing(), TSeedsDistance());
     }
     else
     {
 #ifdef DR_YARA_LARGE_CONTIGS
-        configureMapper<uint32_t>(options, mainMapper, disOptions, TThreading(), TSequencing(), TSeedsDistance());
+        configureMapper<uint32_t>(options, d_mapper, d_options, TThreading(), TSequencing(), TSeedsDistance());
 #else
         throw RuntimeError("Maximum number of contigs exceeded. Recompile with -DYARA_LARGE_CONTIGS=ON.");
 #endif
@@ -572,42 +571,42 @@ void configureMapper(Options const & options,
 // ----------------------------------------------------------------------------
 
 template <typename TSpec, typename TConfig>
-inline void loadAllContigs(Mapper<TSpec, TConfig> & mainMapper, DisOptions & disOptions)
+inline void loadAllContigs(Mapper<TSpec, TConfig> & d_mapper, DisOptions & d_options)
 {
     typedef typename MapperTraits<TSpec, TConfig>::TContigs          TContigs;
 
-    start(mainMapper.timer);
+    start(d_mapper.timer);
     try
     {
-        for (uint32_t i=0; i < disOptions.numberOfBins; ++i)
+        for (uint32_t i=0; i < d_options.number_of_bins; ++i)
         {
-            TContigs tmpContigs;
-            CharString fileName;
-            appendFileName(fileName, disOptions.IndicesDirectory, i);
+            TContigs tmp_contigs;
+            CharString file_name;
+            append_file_name(file_name, d_options.indices_dir, i);
 
-            if (!open(tmpContigs, toCString(fileName), OPEN_RDONLY))
+            if (!open(tmp_contigs, toCString(file_name), OPEN_RDONLY))
                 throw RuntimeError("Error while opening reference file.");
-            append(mainMapper.contigs.seqs, tmpContigs.seqs);
-            append(mainMapper.contigs.names, tmpContigs.names);
+            append(d_mapper.contigs.seqs, tmp_contigs.seqs);
+            append(d_mapper.contigs.names, tmp_contigs.names);
         }
     }
     catch (BadAlloc const & /* e */)
     {
         throw RuntimeError("Insufficient memory to load the reference.");
     }
-    stop(mainMapper.timer);
-    mainMapper.stats.loadContigs += getValue(mainMapper.timer);
+    stop(d_mapper.timer);
+    d_mapper.stats.loadContigs += getValue(d_mapper.timer);
 
-    if (mainMapper.options.verbose > 1)
-        std::cerr << "Loading reference:\t\t\t" << mainMapper.timer << std::endl;
+    if (d_mapper.options.verbose > 1)
+        std::cerr << "Loading reference:\t\t\t" << d_mapper.timer << std::endl;
 }
 
 // ----------------------------------------------------------------------------
-// Function rankMatches()
+// Function rank_matches()
 // ----------------------------------------------------------------------------
 
 template <typename TSpec, typename TConfig, typename TReadSeqs>
-inline void rankMatches2(Mapper<TSpec, TConfig> & me, TReadSeqs const & readSeqs)
+inline void rank_matches(Mapper<TSpec, TConfig> & me, TReadSeqs const & read_seqs)
 {
     typedef MapperTraits<TSpec, TConfig>                    TTraits;
     typedef typename TTraits::TMatch                        TMatch;
@@ -646,9 +645,9 @@ inline void rankMatches2(Mapper<TSpec, TConfig> & me, TReadSeqs const & readSeqs
                 {
                     if (empty(matches)) return TMatchesSize(0);
 
-                    TReadId readId = getMember(front(matches), ReadId());
+                    TReadId read_id = getMember(front(matches), ReadId());
 
-                    return countMatchesInStrata(matches, getReadStrata<TMatch>(me.options, length(readSeqs[readId])));
+                    return countMatchesInStrata(matches, getReadStrata<TMatch>(me.options, length(read_seqs[read_id])));
                 },
                 typename TTraits::TThreading());
 
@@ -670,19 +669,19 @@ inline void rankMatches2(Mapper<TSpec, TConfig> & me, TReadSeqs const & readSeqs
                 // Use one generator per thread.
                 std::default_random_engine generator;
 
-                TReadId readId = position(matchesIt, me.optimalMatchesSet);
+                TReadId read_id = position(matchesIt, me.optimalMatchesSet);
                 TMatchesViewSetValue const & matches = value(matchesIt);
 
                 // Set unmapped reads as invalid.
                 if (empty(matches))
                 {
-                    setPosition(me.primaryMatches, readId, length(me.matchesByErrors) - 1);
+                    setPosition(me.primaryMatches, read_id, length(me.matchesByErrors) - 1);
                 }
                 // Choose match at random.
                 else
                 {
                     TMatchesRnd rnd(0, length(matches) - 1);
-                    setPosition(me.primaryMatches, readId, position(me.primaryMatches, readId) + rnd(generator));
+                    setPosition(me.primaryMatches, read_id, position(me.primaryMatches, read_id) + rnd(generator));
                 }
             },
             Standard(), typename TTraits::TThreading());
@@ -721,10 +720,10 @@ inline void rankMatches2(Mapper<TSpec, TConfig> & me, TReadSeqs const & readSeqs
 }
 
 // ----------------------------------------------------------------------------
-// Function openOutputFile()
+// Function open_output_file()
 // ----------------------------------------------------------------------------
 template <typename TSpec, typename TConfig>
-inline void openOutputFile(Mapper<TSpec, TConfig> & mainMapper, DisOptions & disOptions)
+inline void open_output_file(Mapper<TSpec, TConfig> & d_mapper, DisOptions & d_options)
 {
     typedef MapperTraits<TSpec, TConfig>            TTraits;
     typedef typename TTraits::TContigs              TContigs;
@@ -733,229 +732,233 @@ inline void openOutputFile(Mapper<TSpec, TConfig> & mainMapper, DisOptions & dis
 
     String<uint32_t> allContigLengths;
 
-    start(mainMapper.timer);
+    start(d_mapper.timer);
     try
     {
-        for (uint32_t i=0; i < disOptions.numberOfBins; ++i)
+        for (uint32_t i=0; i < d_options.number_of_bins; ++i)
         {
-            TContigs tmpContigs;
-            String<uint32_t> tmpContigLengths;
-            CharString fileName;
-            appendFileName(fileName, disOptions.IndicesDirectory, i);
+            TContigs tmp_contigs;
+            String<uint32_t> tmp_contig_len;
+            CharString file_name;
+            append_file_name(file_name, d_options.indices_dir, i);
 
-            if (!open(tmpContigs, toCString(fileName), OPEN_RDONLY))
+            if (!open(tmp_contigs, toCString(file_name), OPEN_RDONLY))
                 throw RuntimeError("Error while opening reference file.");
 
-            resize(tmpContigLengths, length(tmpContigs.seqs));
-            transform(tmpContigLengths, tmpContigs.seqs, [](TContigSeq const & seq) { return length(seq); });
-            append(allContigLengths, tmpContigLengths);
+            resize(tmp_contig_len, length(tmp_contigs.seqs));
+            transform(tmp_contig_len, tmp_contigs.seqs, [](TContigSeq const & seq) { return length(seq); });
+            append(allContigLengths, tmp_contig_len);
 
-            append(mainMapper.contigs.names, tmpContigs.names);
+            append(d_mapper.contigs.names, tmp_contigs.names);
         }
     }
     catch (BadAlloc const & /* e */)
     {
         throw RuntimeError("Insufficient memory to load the reference.");
     }
-    stop(mainMapper.timer);
-    mainMapper.stats.loadContigs += getValue(mainMapper.timer);
+    stop(d_mapper.timer);
+    d_mapper.stats.loadContigs += getValue(d_mapper.timer);
 
-    if (mainMapper.options.verbose > 1)
-        std::cerr << "Loading reference:\t\t\t" << mainMapper.timer << std::endl;
+    if (d_mapper.options.verbose > 1)
+        std::cerr << "Loading reference:\t\t\t" << d_mapper.timer << std::endl;
 
     bool opened = false;
 
-    if (empty(mainMapper.options.outputFile))
+    if (empty(d_mapper.options.outputFile))
     {
         // Output to cout.
-        if (mainMapper.options.uncompressedBam)
+        if (d_mapper.options.uncompressedBam)
         {
             // Turn off BAM compression.
-            setFormat(mainMapper.outputFile, mainMapper.options.outputFormat);
-            opened = _open(mainMapper.outputFile, std::cout, Nothing(), False());
+            setFormat(d_mapper.outputFile, d_mapper.options.outputFormat);
+            opened = _open(d_mapper.outputFile, std::cout, Nothing(), False());
         }
         else
         {
-            opened = open(mainMapper.outputFile, std::cout, mainMapper.options.outputFormat);
+            opened = open(d_mapper.outputFile, std::cout, d_mapper.options.outputFormat);
         }
     }
     else
     {
         // Output to file.
-        opened = open(mainMapper.outputFile, toCString(mainMapper.options.outputFile), OPEN_WRONLY | OPEN_CREATE);
+        opened = open(d_mapper.outputFile, toCString(d_mapper.options.outputFile), OPEN_WRONLY | OPEN_CREATE);
     }
 
     if (!opened) throw RuntimeError("Error while opening output file.");
 
-    setContigNames(context(mainMapper.outputFile), mainMapper.contigs.names);
+    setContigNames(context(d_mapper.outputFile), d_mapper.contigs.names);
 
     // Fill contig lengths.
-    resize(contigLengths(context(mainMapper.outputFile)), length(allContigLengths));
-    assign(contigLengths(context(mainMapper.outputFile)), allContigLengths);
+    resize(contigLengths(context(d_mapper.outputFile)), length(allContigLengths));
+    assign(contigLengths(context(d_mapper.outputFile)), allContigLengths);
 
     typedef FileFormat<BamFileOut>::Type    TOutputFormat;
     TOutputFormat of;
     assign(of, Bam());
 
-    if(mainMapper.outputFile.format.tagId == of.tagId || !disOptions.skipSamHeader)
+    if(d_mapper.outputFile.format.tagId == of.tagId || !d_options.skip_sam_header)
     {
         // Write header.
         BamHeader header;
-        fillHeader(header, mainMapper.options);
-        writeHeader(mainMapper.outputFile, header);
+        fillHeader(header, d_mapper.options);
+        writeHeader(d_mapper.outputFile, header);
     }
 }
 
 // ----------------------------------------------------------------------------
-// Function prepairMainMapper()
+// Function prepair_d_mapper()
 // ----------------------------------------------------------------------------
 template <typename TSpec, typename TMainConfig, typename TFilter>
-inline void prepairMainMapper(Mapper<TSpec, TMainConfig> & mainMapper, TFilter const & filter, DisOptions & disOptions)
+inline void prepair_d_mapper(Mapper<TSpec, TMainConfig> & d_mapper, TFilter const & filter, DisOptions & d_options)
 {
-    initReadsContext(mainMapper, mainMapper.reads.seqs);
-    setHost(mainMapper.cigars, mainMapper.cigarString);
-    disOptions.collectedCigars.clear();
+    initReadsContext(d_mapper, d_mapper.reads.seqs);
+    setHost(d_mapper.cigars, d_mapper.cigarString);
+    d_options.collected_cigars.clear();
     if (IsSameType<typename TMainConfig::TSequencing, PairedEnd>::VALUE)
-        resize(mainMapper.primaryMatchesProbs, getReadsCount(mainMapper.reads.seqs), 0.0, Exact());
-    if(disOptions.filterType != NONE)
-        clasifyLoadedReads(mainMapper, filter, disOptions);
+        resize(d_mapper.primaryMatchesProbs, getReadsCount(d_mapper.reads.seqs), 0.0, Exact());
+    if(d_options.filter_type != NONE)
+        clasify_loaded_reads(d_mapper, filter, d_options);
 }
 
 // ----------------------------------------------------------------------------
-// Function finalizeMainMapper()
+// Function finalize_d_mapper()
 // ----------------------------------------------------------------------------
 template <typename TSpec, typename TMainConfig>
-inline void finalizeMainMapper(Mapper<TSpec, TMainConfig> & mainMapper, DisOptions & disOptions)
+inline void finalize_d_mapper(Mapper<TSpec, TMainConfig> & d_mapper, DisOptions & d_options)
 {
-    aggregateMatches(mainMapper, mainMapper.reads.seqs);
-    rankMatches2(mainMapper, mainMapper.reads.seqs);
-    transferCigars(mainMapper, disOptions);
+    aggregateMatches(d_mapper, d_mapper.reads.seqs);
+    rank_matches(d_mapper, d_mapper.reads.seqs);
+    transfer_cigars(d_mapper, d_options);
 
-    writeMatches(mainMapper);
-    clearMatches(mainMapper);
-    clearAlignments(mainMapper);
-    clearReads(mainMapper);
+    writeMatches(d_mapper);
+    clearMatches(d_mapper);
+    clearAlignments(d_mapper);
+    clearReads(d_mapper);
 }
 
 // ----------------------------------------------------------------------------
-// Function sortedBins()
+// Function sorted_bins()
 // ----------------------------------------------------------------------------
-std::vector<uint32_t> sortedBins(DisOptions const & disOptions)
+std::vector<uint32_t> sorted_bins(DisOptions const & d_options)
 {
 
-    std::vector<uint32_t> sortedBinIndex(disOptions.numberOfBins);
-    iota(sortedBinIndex.begin(), sortedBinIndex.end(), 0);
+    std::vector<uint32_t> sorted_bin_index(d_options.number_of_bins);
+    iota(sorted_bin_index.begin(), sorted_bin_index.end(), 0);
 
     // sort indexes based on comparing values in v
-    std::sort(sortedBinIndex.begin(), sortedBinIndex.end(),
-         [&disOptions](size_t i1, size_t i2) {return disOptions.origReadIdMap[i1].size() > disOptions.origReadIdMap[i2].size();});
+    std::sort(sorted_bin_index.begin(), sorted_bin_index.end(),
+         [&d_options](size_t i1, size_t i2) {return d_options.orig_read_id_map[i1].size() > d_options.orig_read_id_map[i2].size();});
 
-    return sortedBinIndex;
+    return sorted_bin_index;
 }
 
 // ----------------------------------------------------------------------------
-// Function runDisMapper()
+// Function run_d_mapper()
 // ----------------------------------------------------------------------------
 template <typename TSpec, typename TMainConfig, typename TFilter>
-inline void runDisMapper(Mapper<TSpec, TMainConfig> & mainMapper, TFilter const & filter, DisOptions & disOptions)
+inline void run_d_mapper(Mapper<TSpec, TMainConfig> & d_mapper, TFilter const & filter, DisOptions & d_options)
 {
-    configureThreads(mainMapper);
+    configureThreads(d_mapper);
 
     // Open output file and write header.
-    openOutputFile(mainMapper, disOptions);
-    openReads(mainMapper);
+    open_output_file(d_mapper, d_options);
+    openReads(d_mapper);
 
     while (true)
     {
-        if (mainMapper.options.verbose > 1) printRuler(std::cerr);
-        loadReads(mainMapper);
-        if (empty(mainMapper.reads.seqs)) break;
+        if (d_mapper.options.verbose > 1) printRuler(std::cerr);
+        loadReads(d_mapper);
+        if (empty(d_mapper.reads.seqs)) break;
 
-        prepairMainMapper(mainMapper, filter, disOptions);
+        prepair_d_mapper(d_mapper, filter, d_options);
 
-        for (auto i: sortedBins(disOptions))
+        for (auto i: sorted_bins(d_options))
         {
-            disOptions.currentBinNo = i;
-            Options options = mainMapper.options;
-            appendFileName(options.contigsIndexFile, disOptions.IndicesDirectory, i);
+            d_options.cur_bin_number = i;
+            Options options = d_mapper.options;
+            append_file_name(options.contigsIndexFile, d_options.indices_dir, i);
             if (!openContigsLimits(options))
                 throw RuntimeError("Error while opening reference file.");
-            configureMapper<TSpec, TMainConfig>(options, mainMapper, disOptions);
+            configureMapper<TSpec, TMainConfig>(options, d_mapper, d_options);
         }
 
-        finalizeMainMapper(mainMapper, disOptions);
+        finalize_d_mapper(d_mapper, d_options);
     }
-    closeReads(mainMapper);
-    closeOutputFile(mainMapper);
+    closeReads(d_mapper);
+    closeOutputFile(d_mapper);
 }
 
 // ----------------------------------------------------------------------------
-// Function spawnDisMapper()
+// Function spawn_d_mapper()
 // ----------------------------------------------------------------------------
 template <typename TContigsSize, typename TContigsLen, typename TContigsSum,
 typename TThreading, typename TSequencing, typename TSeedsDistance>
-inline void spawnDisMapper(DisOptions & disOptions,
+inline void spawn_d_mapper(DisOptions & d_options,
                            TThreading const & /* tag */,
                            TSequencing const & /* tag */,
                            TSeedsDistance const & /* tag */)
 {
-    disOptions.outputFile = disOptions.superOutputFile;
+    d_options.outputFile = d_options.super_output_file;
     typedef ReadMapperConfig<TThreading, TSequencing, TSeedsDistance, TContigsSize, TContigsLen, TContigsSum>  TMainConfig;
-    Mapper<void, TMainConfig> disMapper(disOptions);
+    Mapper<void, TMainConfig> d_mapper(d_options);
 
     Timer<double> timer;
 
     start(timer);
-    start(disMapper.timer);
+    start(d_mapper.timer);
 
-    if (disOptions.filterType == BLOOM)
+    if (d_options.filter_type == BLOOM)
     {
-        SeqAnBloomFilter<> filter  (toCString(disOptions.filterFile));
+        typedef BinningDirectory<InterleavedBloomFilter,
+                                 BDConfig<Dna, Normal, Uncompressed> > BinningDirectoriesIBF;
 
-        disOptions.kmerSize = filter.getKmerSize();
+        BinningDirectoriesIBF filter;
+        retrieve(filter, toCString(d_options.filter_file));
 
-//        if(filter.getNumberOfBins() != disOptions.numberOfBins)
-//            std::cerr << "[WARNING] Provided number of bins (" << disOptions.numberOfBins << ")differs from that of the bloom filter (" << filter.getNumberOfBins() << ")";
+        d_options.kmer_size = filter.kmerSize;
 
-        stop(disMapper.timer);
-        disOptions.loadFilter += getValue(disMapper.timer);
-        runDisMapper(disMapper, filter, disOptions);
+        stop(d_mapper.timer);
+        d_options.load_filter += getValue(d_mapper.timer);
+        run_d_mapper(d_mapper, filter, d_options);
     }
-    else if (disOptions.filterType == KMER_DIRECT)
+    else if (d_options.filter_type == KMER_DIRECT)
     {
-        SeqAnKDXFilter<> filter (toCString(disOptions.filterFile));
+        typedef BinningDirectory<DirectAddressing,
+                                 BDConfig<Dna, Normal, Uncompressed> > BinningDirectoriesDA;
+        BinningDirectoriesDA filter;
+        retrieve(filter, toCString(d_options.filter_file));
 
-        disOptions.kmerSize = filter.getKmerSize();
+        d_options.kmer_size = filter.kmerSize;
 
-//        if(filter.getNumberOfBins() != disOptions.numberOfBins)
-//            std::cerr << "[WARNING] Provided number of bins (" << disOptions.numberOfBins << ")differs from that of the bloom filter (" << filter.getNumberOfBins() << ")\n";
-
-        stop(disMapper.timer);
-        disOptions.loadFilter += getValue(disMapper.timer);
-        runDisMapper(disMapper, filter, disOptions);
+        stop(d_mapper.timer);
+        d_options.load_filter += getValue(d_mapper.timer);
+        run_d_mapper(d_mapper, filter, d_options);
     }
     else
     {
         // dummy filter in case of nofilter option
-        SeqAnBloomFilter<> filter(64, 3, 20, 1);
+        typedef BinningDirectory<InterleavedBloomFilter,
+                                 BDConfig<Dna, Normal, Uncompressed> > BinningDirectoriesIBF;
 
-        stop(disMapper.timer);
-        disOptions.loadFilter += getValue(disMapper.timer);
-        runDisMapper(disMapper, filter, disOptions);
+        BinningDirectoriesIBF filter(64, 3, 20, 1);
+
+        stop(d_mapper.timer);
+        d_options.load_filter += getValue(d_mapper.timer);
+        run_d_mapper(d_mapper, filter, d_options);
     }
     stop(timer);
-    if (disMapper.options.verbose > 0)
+    if (d_mapper.options.verbose > 0)
     {
         double total = getValue(timer) / 100.0;
 
-        std::cerr << "\nFilter loading time:\t\t" << disOptions.loadFilter << " sec" << "\t\t" << disOptions.loadFilter / total << " %" << std::endl;
-        std::cerr << "Reads filtering time:\t\t" << disOptions.filterReads << " sec" << "\t\t" << disOptions.filterReads / total << " %" << std::endl;
-        std::cerr << "Reads copying time:\t\t" << disOptions.copyReads << " sec" << "\t\t" << disOptions.copyReads / total << " %" << std::endl;
-        std::cerr << "Alignments copying time:\t" << disOptions.copyAlignments << " sec" << "\t\t" << disOptions.copyAlignments / total << " %" << std::endl;
-        std::cerr << "Cigars moving time:\t\t" << disOptions.moveCigars << " sec" << "\t\t" << disOptions.moveCigars / total << " %" << std::endl;
+        std::cerr << "\nFilter loading time:\t\t" << d_options.load_filter << " sec" << "\t\t" << d_options.load_filter / total << " %" << std::endl;
+        std::cerr << "Reads filtering time:\t\t" << d_options.filter_reads << " sec" << "\t\t" << d_options.filter_reads / total << " %" << std::endl;
+        std::cerr << "Reads copying time:\t\t" << d_options.copy_reads << " sec" << "\t\t" << d_options.copy_reads / total << " %" << std::endl;
+        std::cerr << "Alignments copying time:\t" << d_options.copy_alignments << " sec" << "\t\t" << d_options.copy_alignments / total << " %" << std::endl;
+        std::cerr << "Cigars moving time:\t\t" << d_options.move_cigars << " sec" << "\t\t" << d_options.move_cigars / total << " %" << std::endl;
 
-        printStats(disMapper, timer);
-		std::cerr << "Avg reads per bin:\t\t" << (double)disOptions.filteredReads / disOptions.numberOfBins << std::endl;
+        printStats(d_mapper, timer);
+		std::cerr << "Avg reads per bin:\t\t" << (double)d_options.filtered_reads / d_options.number_of_bins << std::endl;
 	}
 }
 
