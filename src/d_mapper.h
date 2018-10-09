@@ -93,7 +93,7 @@ public:
         if (kmer_size * (1 + max_error) > read_len)
             return 0;
 
-        return (read_len - kmer_size * (1 + max_error) + 1)/_FILTER_SKIP_KMER;
+        return std::floor((read_len - kmer_size * (1 + max_error) + 1)/_FILTER_SKIP_KMER);
     }
 
 };
