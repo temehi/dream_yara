@@ -64,6 +64,11 @@ if (DR_YARA_STATIC_BUILD)
     endif (CMAKE_SYSTEM_NAME MATCHES "Linux")
 endif (DR_YARA_STATIC_BUILD)
 
+if (FILTER_SKIP_KMER)
+    add_definitions (-DFILTER_SKIP_KMER=${FILTER_SKIP_KMER})
+endif (FILTER_SKIP_KMER)
+
+
 # ----------------------------------------------------------------------------
 # Dependencies (continued)
 # ----------------------------------------------------------------------------

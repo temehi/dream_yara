@@ -36,6 +36,12 @@
 #ifndef APP_YARA_DIS_MAPPER_H_
 #define APP_YARA_DIS_MAPPER_H_
 
+#ifdef FILTER_SKIP_KMER
+    const int _FILTER_SKIP_KMER = FILTER_SKIP_KMER;
+#else
+    const int _FILTER_SKIP_KMER = 0;
+#endif
+
 using namespace seqan;
 
 // ==========================================================================
@@ -87,7 +93,7 @@ public:
         if (kmer_size * (1 + max_error) > read_len)
             return 0;
 
-        return read_len - kmer_size * (1 + max_error) + 1;
+        return (read_len - kmer_size * (1 + max_error) + 1)/_FILTER_SKIP_KMER;
     }
 
 };
@@ -347,13 +353,17 @@ inline void clasify_loaded_reads(Mapper<TSpec, TMainConfig>  & d_mapper, TFilter
             for (uint32_t readID = taskNo*batchSize; readID < number_of_reads && readID < (taskNo +1) * batchSize; ++readID)
             {
                 std::vector<bool> selectedBins(d_options.number_of_bins, false);
-                select(filter, selectedBins, d_mapper.reads.seqs[readID], threshold);
-                select(filter, selectedBins, d_mapper.reads.seqs[readID + number_of_reads], threshold);
+                // select(filter, selectedBins, d_mapper.reads.seqs[readID], threshold);
+                // select(filter, selectedBins, d_mapper.reads.seqs[readID + number_of_reads], threshold);
+                select<Offset<_FILTER_SKIP_KMER>>(filter, selectedBins, d_mapper.reads.seqs[readID], threshold);
+                select<Offset<_FILTER_SKIP_KMER>>(filter, selectedBins, d_mapper.reads.seqs[readID + number_of_reads], threshold);
 
                 if (IsSameType<typename TMainConfig::TSequencing, PairedEnd>::VALUE)
                 {
-                    select(filter, selectedBins, d_mapper.reads.seqs[readID + 2*number_of_reads], threshold);
-                    select(filter, selectedBins, d_mapper.reads.seqs[readID + 3*number_of_reads], threshold);
+                    // select(filter, selectedBins, d_mapper.reads.seqs[readID + 2*number_of_reads], threshold);
+                    // select(filter, selectedBins, d_mapper.reads.seqs[readID + 3*number_of_reads], threshold);
+                    select<Offset<_FILTER_SKIP_KMER>>(filter, selectedBins, d_mapper.reads.seqs[readID + 2*number_of_reads], threshold);
+                    select<Offset<_FILTER_SKIP_KMER>>(filter, selectedBins, d_mapper.reads.seqs[readID + 3*number_of_reads], threshold);
                 }
 
                 for (uint32_t binNo = 0; binNo < d_options.number_of_bins; ++binNo)

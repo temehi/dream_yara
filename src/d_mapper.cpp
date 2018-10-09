@@ -552,6 +552,8 @@ bool read_filter_metadata(DisOptions &  d_options)
 //
 int main(int argc, char const ** argv)
 {
+
+    std::cerr << "The skip size is: " << _FILTER_SKIP_KMER << std::endl;
     ArgumentParser parser;
     DisOptions d_options;
     setupArgumentParser(parser, d_options);
