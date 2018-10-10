@@ -311,12 +311,12 @@ inline void clasify_loaded_reads(Mapper<TSpec, TMainConfig>  & d_mapper, TFilter
 
     uint32_t number_of_reads = getReadsCount( d_mapper.reads.seqs);
     uint16_t avgReadLen = lengthSum(d_mapper.reads.seqs) / (number_of_reads * 2);
-    uint16_t threshold = d_options.get_threshold(avgReadLen);
+    uint16_t average_threshold = d_options.get_threshold(avgReadLen);
 
     d_options.orig_read_id_map.clear();
     d_options.orig_read_id_map.resize(d_options.number_of_bins);
 
-    if (threshold == 0)
+    if (average_threshold == 0)
     {
         std::cerr <<"[WARNING!] 0 k-mer is required to filter a read!\n";
         std::cerr <<"All reads will pass filteration and be mapped everywhere.\n ";
@@ -344,8 +344,10 @@ inline void clasify_loaded_reads(Mapper<TSpec, TMainConfig>  & d_mapper, TFilter
     for (uint32_t taskNo = 0; taskNo < numThr; ++taskNo)
     {
         tasks.emplace_back(std::async([=, &d_mapper, &d_options, &filter] {
+            uint16_t threshold = 0;
             for (uint32_t readID = taskNo*batchSize; readID < number_of_reads && readID < (taskNo +1) * batchSize; ++readID)
             {
+                threshold = d_options.get_threshold(length(d_mapper.reads.seqs[readID]));
                 std::vector<bool> selectedBins(d_options.number_of_bins, false);
                 select(filter, selectedBins, d_mapper.reads.seqs[readID], threshold);
                 select(filter, selectedBins, d_mapper.reads.seqs[readID + number_of_reads], threshold);
