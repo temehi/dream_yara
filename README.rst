@@ -163,5 +163,4 @@ For questions or comments, feel free to contact: Temesgen H. Dadi <temesgen.dadi
 References
 ----------
 Dadi, T. H., Siragusa, E., Piro, V. C., Andrusch, A., Seiler, E., Renard, B. Y., & Reinert, K. (2018).
-DREAM-Yara: An exact read mapper for very large databases with short update time.
-BioRxiv, 256354. https://doi.org/10.1101/256354
+DREAM-Yara: an exact read mapper for very large databases with short update time, Bioinformatics, Volume 34, Issue 17, 1 September 2018, Pages i766–i772, https://doi.org/10.1093/bioinformatics/bty567
