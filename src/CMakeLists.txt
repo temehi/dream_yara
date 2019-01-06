@@ -255,6 +255,27 @@ add_executable(dream_yara_mapper  d_mapper.cpp
                                   misc_timer.h
                                   misc_options.h
                                   d_misc_options.h
+add_executable(dream_yara_apply_filter  d_apply_filter.cpp
+                                  d_apply_filter.h
+                                  mapper.h
+                                  mapper_collector.h
+                                  mapper_classifier.h
+                                  mapper_ranker.h
+                                  mapper_filter.h
+                                  mapper_extender.h
+                                  mapper_verifier.h
+                                  mapper_aligner.h
+                                  mapper_writer.h
+                                  basic_alphabet.h
+                                  file_pair.h
+                                  file_prefetched.h
+                                  store_seqs.h
+                                  misc_tags.h
+                                  misc_timer.h
+                                  misc_options.h
+                                  d_misc_options.h
+                                  d_kdx_filter.h
+                                  d_bloom_filter.h
                                   misc_types.h
                                   bits_reads.h
                                   bits_hits.h
@@ -271,6 +292,7 @@ target_link_libraries (dream_yara_indexer ${SEQAN_LIBRARIES})
 target_link_libraries (dream_yara_build_filter ${SEQAN_LIBRARIES})
 target_link_libraries (dream_yara_update_filter ${SEQAN_LIBRARIES})
 target_link_libraries (dream_yara_mapper ${SEQAN_LIBRARIES})
+target_link_libraries (dream_yara_apply_filter ${SEQAN_LIBRARIES})
 
 
 # ----------------------------------------------------------------------------
