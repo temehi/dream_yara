@@ -72,32 +72,17 @@ struct Options;
 // ----------------------------------------------------------------------------
 
 #include "basic_alphabet.h"
-#include "file_pair.h"
 #include "file_prefetched.h"
 #include "store_seqs.h"
 #include "misc_timer.h"
 #include "misc_tags.h"
 #include "misc_types.h"
-#include "index_fm.h"
 #include "bits_reads.h"
 #include "bits_hits.h"
 #include "bits_context.h"
 #include "bits_matches.h"
-#include "bits_seeds.h"
-#include "bits_bucket.h"
-#include "find_verifier.h"
-#include "find_extender.h"
 #include "misc_options.h"
 #include "d_misc_options.h"
-#include "mapper_collector.h"
-#include "mapper_classifier.h"
-#include "mapper_ranker.h"
-#include "mapper_filter.h"
-#include "mapper_extender.h"
-#include "mapper_verifier.h"
-#include "mapper_aligner.h"
-#include "mapper_writer.h"
-#include "mapper.h"
 
 #include "d_apply_filter.h"
 
@@ -225,34 +210,12 @@ bool check_read_files(FilterAppOptions const &  options)
 }
 
 // ----------------------------------------------------------------------------
-// Function read_filter_metadata()
-// ----------------------------------------------------------------------------
-bool read_filter_metadata(FilterAppOptions &  options)
-{
-    std::ifstream in(toCString(options.filter_file), std::ios::in | std::ios::binary);
-    uint64_t x = BD_METADATA_SIZE/8; //bits -> bytes
-
-    sdsl::int_vector<64>  metadata_vec(BD_METADATA_SIZE/64, 0); //bits -> uint64_t
-    in.seekg(-x, in.end); // seek from end of file
-
-    uint64_t* p  = &(metadata_vec[0]);
-    in.read((char*)p, x * sizeof(uint64_t));
-
-    //    std::cout << metadata_vec << std::endl;
-    options.number_of_bins = metadata_vec[0];
-    options.kmer_size = metadata_vec[2];
-
-    return true;
-}
-
-// ----------------------------------------------------------------------------
 // Function init_filter_app()
 // ----------------------------------------------------------------------------
 template <typename TThreading>
 inline void init_filter_app(FilterAppOptions & options, TThreading const & threading)
 {
-    typedef ReadMapperConfig<TThreading>  TConfig;
-    FilterApp<void, TConfig> me(options);
+    FilterApp<void, TThreading> me(options);
 
     start(me.timer);
 
@@ -263,11 +226,11 @@ inline void init_filter_app(FilterAppOptions & options, TThreading const & threa
         BinningDirectoriesIBF filter;
         retrieve(filter, toCString(me.options.filter_file));
 
-        me.options.kmer_size = filter.kmerSize;
-        me.options.number_of_bins = filter.noOfBins;
+        me.kmer_size = filter.kmerSize;
+        me.number_of_bins = filter.noOfBins;
 
         stop(me.timer);
-        me.options.load_filter_time += getValue(me.timer);
+        me.load_filter_time += getValue(me.timer);
         run_filter_app(me, filter);
     }
     else if (me.options.filter_type == KMER_DIRECT)
@@ -277,11 +240,11 @@ inline void init_filter_app(FilterAppOptions & options, TThreading const & threa
         BinningDirectoriesDA filter;
         retrieve(filter, toCString(me.options.filter_file));
 
-        me.options.kmer_size = filter.kmerSize;
-        me.options.number_of_bins = filter.noOfBins;
+        me.kmer_size = filter.kmerSize;
+        me.number_of_bins = filter.noOfBins;
 
         stop(me.timer);
-        me.options.load_filter_time += getValue(me.timer);
+        me.load_filter_time += getValue(me.timer);
         run_filter_app(me, filter);
     }
     else
@@ -293,13 +256,14 @@ inline void init_filter_app(FilterAppOptions & options, TThreading const & threa
         BinningDirectoriesIBF filter(64, 3, 20, 1);
 
         stop(me.timer);
-        me.options.load_filter_time += getValue(me.timer);
+        me.load_filter_time += getValue(me.timer);
         run_filter_app(me, filter);
     }
-    std::cerr << "Number of reads:\t\t" << (double)me.options.reads_count << std::endl;
-    std::cerr << "Avg reads per bin:\t\t" << (double)me.options.passed_reads_count / me.options.number_of_bins << std::endl;
-    std::cerr << "Filter loading time:\t" << me.options.load_filter_time << " sec" << std::endl;
-    std::cerr << "Filter reads time:\t\t" << me.options.filter_reads_time << " sec" << std::endl;
+    std::cerr << "Number of reads:\t\t" << (double)me.loaded_reads_count << std::endl;
+    std::cerr << "Avg reads per bin:\t\t" << (double)me.passed_reads_count / me.number_of_bins << std::endl;
+    std::cerr << "Filter loading time:\t" << me.load_filter_time << " sec" << std::endl;
+    std::cerr << "Reads loading time:\t\t" << me.load_reads_time << " sec" << std::endl;
+    std::cerr << "Filter reads time:\t\t" << me.filter_reads_time << " sec" << std::endl;
 }
 
 

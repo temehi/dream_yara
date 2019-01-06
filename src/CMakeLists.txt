@@ -255,27 +255,6 @@ add_executable(dream_yara_mapper  d_mapper.cpp
                                   misc_timer.h
                                   misc_options.h
                                   d_misc_options.h
-add_executable(dream_yara_apply_filter  d_apply_filter.cpp
-                                  d_apply_filter.h
-                                  mapper.h
-                                  mapper_collector.h
-                                  mapper_classifier.h
-                                  mapper_ranker.h
-                                  mapper_filter.h
-                                  mapper_extender.h
-                                  mapper_verifier.h
-                                  mapper_aligner.h
-                                  mapper_writer.h
-                                  basic_alphabet.h
-                                  file_pair.h
-                                  file_prefetched.h
-                                  store_seqs.h
-                                  misc_tags.h
-                                  misc_timer.h
-                                  misc_options.h
-                                  d_misc_options.h
-                                  d_kdx_filter.h
-                                  d_bloom_filter.h
                                   misc_types.h
                                   bits_reads.h
                                   bits_hits.h
@@ -286,6 +265,21 @@ add_executable(dream_yara_apply_filter  d_apply_filter.cpp
                                   find_extender.h
                                   find_verifier.h
                                   index_fm.h)
+
+add_executable(dream_yara_apply_filter  d_apply_filter.cpp
+                                        d_apply_filter.h
+                                        basic_alphabet.h
+                                        file_prefetched.h
+                                        store_seqs.h
+                                        misc_timer.h
+                                        misc_tags.h
+                                        misc_types.h
+                                        bits_reads.h
+                                        bits_hits.h
+                                        bits_context.h
+                                        bits_matches.h
+                                        misc_options.h
+                                        d_misc_options.h)
 
 # Add dependencies found by find_package (SeqAn).
 target_link_libraries (dream_yara_indexer ${SEQAN_LIBRARIES})

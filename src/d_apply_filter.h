@@ -52,17 +52,9 @@ public:
     unsigned                reads_count;
     unsigned                threads_count;
 
-    double                  load_filter_time;
-    double                  filter_reads_time;
-
-    uint32_t                kmer_size;
-    uint32_t                number_of_bins;
-    uint64_t                passed_reads_count;
-
     FilterType              filter_type = BLOOM;
 
     bool stat_only;
-
 
     std::vector<std::string> filter_typeList = {"bloom", "kmer_direct", "none"};
     unsigned            verbose;
@@ -72,11 +64,6 @@ public:
         error_rate(0.05f),
         reads_count(100000),
         threads_count(1),
-        load_filter_time(0.0),
-        filter_reads_time(0.0),
-        kmer_size(20),
-        number_of_bins(64),
-        passed_reads_count(0),
         stat_only(false),
         verbose(0)
     {
@@ -84,10 +71,50 @@ public:
         threads_count = std::thread::hardware_concurrency();
 #endif
     }
+};
+
+// ----------------------------------------------------------------------------
+// Class FilterApp
+// ----------------------------------------------------------------------------
+
+template <typename TSpec, typename TThreading>
+struct FilterApp
+{
+    // typedef typename If<IsSameType<TSequencing, PairedEnd>,
+    //                     Pair<SeqFileIn>, SeqFileIn>::Type           TReadsFileIn;
+    typedef SeqStore<void, SeqConfig<void>>                      TReads;
+    typedef PrefetchedFile<SeqFileIn, TReads, TThreading>        TReadsFile;
+
+    FilterAppOptions &    options;
+    Timer<double>         timer;
+    TReads                reads;
+    TReadsFile            reads_file;
+
+    uint32_t              kmer_size;
+    uint32_t              number_of_bins;
+
+    double                load_filter_time;
+    double                filter_reads_time;
+    double                load_reads_time;
+    uint64_t              loaded_reads_count;
+    uint64_t              passed_reads_count;
+
+
+    FilterApp(FilterAppOptions & options) :
+        options(options),
+        reads_file(options.reads_count),
+        kmer_size(20),
+        number_of_bins(64),
+        load_filter_time(0.0),
+        filter_reads_time(0.0),
+        load_reads_time(0.0),
+        loaded_reads_count(0),
+        passed_reads_count(0)
+    {};
 
     uint16_t get_threshold(uint16_t readLen)
     {
-        uint16_t maxError = error_rate * readLen;
+        uint16_t maxError = options.error_rate * readLen;
 
         // same as readLen - kmer_size + 1 - (maxError * kmer_size);
         if (kmer_size * (1 + maxError) > readLen)
@@ -98,32 +125,6 @@ public:
 
 };
 
-// ----------------------------------------------------------------------------
-// Class FilterApp
-// ----------------------------------------------------------------------------
-
-template <typename TSpec, typename TConfig = void>
-struct FilterApp
-{
-    // typedef typename If<IsSameType<TSequencing, PairedEnd>,
-    //                     Pair<SeqFileIn>, SeqFileIn>::Type           TReadsFileIn;
-    typedef typename TConfig::TThreading                         TThreading;
-    typedef SeqStore<void, YaraReadsConfig>                      TReads;
-    typedef PrefetchedFile<SeqFileIn, TReads, TThreading>        TReadsFile;
-
-    FilterAppOptions &          options;
-    Timer<double>                       timer;
-    Stats<double>                       stats;
-
-    TReads             reads;
-    TReadsFile         reads_file;
-
-    FilterApp(FilterAppOptions & options) :
-        options(options),
-        reads_file(options.reads_count)
-    {};
-};
-
 // ==========================================================================
 // Functions
 // ==========================================================================
@@ -131,17 +132,17 @@ struct FilterApp
 // ----------------------------------------------------------------------------
 // Function write_filter_results()
 // ----------------------------------------------------------------------------
-template <typename TSpec, typename TConfig, typename TFilter>
-inline void write_filter_results(FilterApp<TSpec, TConfig> & me, TFilter const & filter)
+template <typename TSpec, typename TThreading, typename TFilter>
+inline void write_filter_results(FilterApp<TSpec, TThreading> & me, TFilter const & filter)
 {
     start(me.timer);
 
     std::map<uint32_t, std::vector<bool>> filter_result;
-    std::vector<bool> empty_result(me.options.number_of_bins, false);
+    std::vector<bool> empty_result(me.number_of_bins, false);
 
     uint32_t number_of_reads = getReadsCount(me.reads.seqs);
     uint16_t avg_read_length = lengthSum(me.reads.seqs) / (number_of_reads * 2);
-    uint16_t average_threshold = me.options.get_threshold(avg_read_length);
+    uint16_t average_threshold = me.get_threshold(avg_read_length);
 
 
     if (average_threshold == 0)
@@ -169,7 +170,7 @@ inline void write_filter_results(FilterApp<TSpec, TConfig> & me, TFilter const &
             uint16_t threshold = 0;
             for (uint32_t read_id = task_num*batch_size; read_id < number_of_reads && read_id < (task_num +1) * batch_size; ++read_id)
             {
-                threshold = me.options.get_threshold(length(me.reads.seqs[read_id]));
+                threshold = me.get_threshold(length(me.reads.seqs[read_id]));
                 select(filter, filter_result[read_id], me.reads.seqs[read_id], threshold);
                 select(filter, filter_result[read_id], me.reads.seqs[read_id + number_of_reads], threshold);
             }
@@ -180,24 +181,24 @@ inline void write_filter_results(FilterApp<TSpec, TConfig> & me, TFilter const &
         task.get();
     }
     stop(me.timer);
-    me.options.filter_reads_time += getValue(me.timer);
+    me.filter_reads_time += getValue(me.timer);
 
     // get count data
     for (uint32_t read_id = 0; read_id < number_of_reads; ++read_id)
     {
-        me.options.passed_reads_count +=  std::count(filter_result[read_id].begin(), filter_result[read_id].end(), true);
+        me.passed_reads_count +=  std::count(filter_result[read_id].begin(), filter_result[read_id].end(), true);
     }
 
     if (me.options.stat_only)
         return;
-    
+
     std::cerr << "Writing results to a file ..." << std::endl;
     // get write the filter result
     std::ofstream filter_ostream(me.options.output_file, std::ios::binary);
     for (uint32_t read_id = 0; read_id < number_of_reads; ++read_id)
     {
         filter_ostream  << me.reads.names[read_id];
-        for (uint32_t bin_num=0; bin_num<me.options.number_of_bins; ++bin_num)
+        for (uint32_t bin_num=0; bin_num<me.number_of_bins; ++bin_num)
         {
             filter_ostream  << "," << filter_result[read_id][bin_num];
         }
@@ -211,8 +212,8 @@ inline void write_filter_results(FilterApp<TSpec, TConfig> & me, TFilter const &
 // ----------------------------------------------------------------------------
 // Loads one block of reads.
 
-template <typename TSpec, typename TConfig>
-inline void load_reads(FilterApp<TSpec, TConfig> & me)
+template <typename TSpec, typename TThreading>
+inline void load_reads(FilterApp<TSpec, TThreading> & me)
 {
     start(me.timer);
 
@@ -223,8 +224,8 @@ inline void load_reads(FilterApp<TSpec, TConfig> & me)
 
     stop(me.timer);
 
-    me.stats.loadReads += getValue(me.timer);
-    me.stats.loadedReads += getReadsCount(me.reads.seqs);
+    me.load_reads_time += getValue(me.timer);
+    me.loaded_reads_count += getReadsCount(me.reads.seqs);
 
     if (me.options.verbose > 1)
     {
@@ -237,8 +238,8 @@ inline void load_reads(FilterApp<TSpec, TConfig> & me)
 // ----------------------------------------------------------------------------
 // Function run_filter_app()
 // ----------------------------------------------------------------------------
-template <typename TSpec, typename TConfig, typename TFilter>
-inline void run_filter_app(FilterApp<TSpec, TConfig> & me, TFilter const & filter)
+template <typename TSpec, typename TThreading, typename TFilter>
+inline void run_filter_app(FilterApp<TSpec, TThreading> & me, TFilter const & filter)
 {
     if (!open(me.reads_file, toCString(me.options.reads_file.i1)))
         throw RuntimeError("Error while opening reads file.");
