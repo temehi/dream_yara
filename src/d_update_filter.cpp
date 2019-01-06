@@ -214,7 +214,7 @@ inline void update_filter(Options & options, TFilter & filter)
 
     for (uint32_t task_number = 0; task_number < options.threads_count; ++task_number)
     {
-        tasks.emplace_back(std::async([=, &filter] {
+        tasks.emplace_back(std::async([=, &filter, &options] {
             for (uint32_t file_number = task_number*batch_size;
                  file_number < options.number_of_bins && file_number < (task_number +1) * batch_size;
                  ++file_number)

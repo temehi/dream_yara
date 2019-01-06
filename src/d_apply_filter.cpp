@@ -290,7 +290,7 @@ int main(int argc, char const ** argv)
     {
 
 #ifdef _OPENMP
-    if (options.threadsCount > 1)
+    if (options.threads_count > 1)
         init_filter_app(options, Parallel());
     else
 #endif
